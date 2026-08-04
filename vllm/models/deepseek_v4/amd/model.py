@@ -761,6 +761,11 @@ class DeepseekV4DecoderLayer(nn.Module):
         self.use_fused_mhc = HAS_TILELANG_MHC and not (
             HAS_AITER_MHC and self.hidden_size % 256 == 0
         )
+        # The attention hc_post feeds straight into the FFN hc_pre, so those
+        # two can run as one kernel pair without changing the data flow.
+        self.fuse_intra_layer_post_pre = HAS_AITER_MHC and (
+            self.hidden_size % 256 == 0
+        )
 
     def hc_pre(
         self,
@@ -860,12 +865,28 @@ class DeepseekV4DecoderLayer(nn.Module):
         )
         x = self.attn_norm(x)
         x = self.attn(positions, x, None)
-        x = self.hc_post(x, residual, post, comb)
 
-        residual = x
-        x, post, comb = self.hc_pre(
-            x, self.hc_ffn_fn, self.hc_ffn_scale, self.hc_ffn_base
-        )
+        if self.fuse_intra_layer_post_pre:
+            residual, post, comb, x = self.mhc_fused_post_pre(
+                x,
+                residual,
+                post,
+                comb,
+                self.hc_ffn_fn,
+                self.hc_ffn_scale,
+                self.hc_ffn_base,
+                self.rms_norm_eps,
+                self.hc_eps,
+                self.hc_eps,
+                self.hc_post_alpha,
+                self.hc_sinkhorn_iters,
+            )
+        else:
+            x = self.hc_post(x, residual, post, comb)
+            residual = x
+            x, post, comb = self.hc_pre(
+                x, self.hc_ffn_fn, self.hc_ffn_scale, self.hc_ffn_base
+            )
         x = self.ffn_norm(x)
         x = self.ffn(x, input_ids)
         x = self.hc_post(x, residual, post, comb)
