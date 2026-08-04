@@ -397,6 +397,40 @@ class FusedTopKBiasRouter(BaseRouter):
             routed_scaling_factor=self.routed_scaling_factor,
         )
 
+    def _can_use_aiter_topk_buffer(
+        self,
+        topk_weights: torch.Tensor,
+        topk_ids: torch.Tensor,
+        m: int,
+        n: int,
+    ) -> bool:
+        """Whether the preallocated AITER combined topk buffer can be reused.
+
+        The buffer bakes in its shared columns at init, so it is only valid
+        when every one of those baked-in assumptions holds: score 1.0, int32
+        ids, fp32 weights, and no EP sentinel column. Anything else falls back
+        to building the shared slots per call.
+        """
+        from vllm.model_executor.layers.fused_moe.experts.rocm_aiter_moe import (
+            aiter_topK_meta_data,
+        )
+
+        if aiter_topK_meta_data is None:
+            return False
+        if self.shared_expert_weight != 1.0:
+            return False
+        if topk_ids.dtype != torch.int32 or topk_weights.dtype != torch.float32:
+            return False
+
+        buf_weights, buf_ids = aiter_topK_meta_data
+        # A wider buffer carries the EP sentinel column, whose ids are rank
+        # dependent and do not match the unconditional shared slots here.
+        return (
+            buf_weights.shape[1] == self.top_k + n
+            and buf_ids.shape[1] == self.top_k + n
+            and buf_weights.shape[0] >= m
+        )
+
     def _compute_routing(
         self,
         hidden_states: torch.Tensor,
@@ -424,20 +458,36 @@ class FusedTopKBiasRouter(BaseRouter):
         if self.num_fused_shared_experts > 0:
             m = topk_ids.shape[0]
             n = self.num_fused_shared_experts
-            # global_num_experts counts only the routed experts; the fused
-            # shared experts occupy the slots immediately after them, i.e. ids
-            # [global_num_experts, global_num_experts + n).
-            base = self.global_num_experts
-            shared_ids = torch.arange(
-                base, base + n, dtype=topk_ids.dtype, device=topk_ids.device
-            ).expand(m, n)
-            shared_w = torch.full(
-                (m, n),
-                self.shared_expert_weight,
-                dtype=topk_weights.dtype,
-                device=topk_weights.device,
-            )
-            topk_ids = torch.cat([topk_ids, shared_ids], dim=-1)
-            topk_weights = torch.cat([topk_weights, shared_w], dim=-1)
+            if self._can_use_aiter_topk_buffer(topk_weights, topk_ids, m, n):
+                # ExpertMapManager already allocated a combined
+                # [max_num_tokens, top_k + n] buffer with the shared columns
+                # filled once at init. Copying the routed results into it costs
+                # two slice-copies per layer instead of arange + full + two cat.
+                from vllm.model_executor.layers.fused_moe.experts.rocm_aiter_moe import (  # noqa: E501
+                    inject_shared_expert_weights,
+                )
+
+                topk_weights, topk_ids = inject_shared_expert_weights(
+                    topk_weights,
+                    topk_ids,
+                    topk=self.top_k,
+                    num_fused_shared_experts=n,
+                )
+            else:
+                # global_num_experts counts only the routed experts; the fused
+                # shared experts occupy the slots immediately after them, i.e.
+                # ids [global_num_experts, global_num_experts + n).
+                base = self.global_num_experts
+                shared_ids = torch.arange(
+                    base, base + n, dtype=topk_ids.dtype, device=topk_ids.device
+                ).expand(m, n)
+                shared_w = torch.full(
+                    (m, n),
+                    self.shared_expert_weight,
+                    dtype=topk_weights.dtype,
+                    device=topk_weights.device,
+                )
+                topk_ids = torch.cat([topk_ids, shared_ids], dim=-1)
+                topk_weights = torch.cat([topk_weights, shared_w], dim=-1)
 
         return topk_weights, topk_ids
