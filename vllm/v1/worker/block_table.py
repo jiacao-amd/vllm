@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
 
+import os
 from enum import Enum
 
 import numpy as np
@@ -14,6 +15,12 @@ from vllm.v1.attention.backends.utils import PAD_SLOT_ID
 from vllm.v1.utils import CpuGpuBuffer
 
 logger = init_logger(__name__)
+
+# A/B switch for the trimmed block-table commit; remove before upstreaming.
+# Checked per call rather than at import so a single server can run both arms:
+# module-level env is frozen in the workers at fork time. The stat() is ~1 us
+# against a ~21 ms step and is on both arms, so it cancels in the delta.
+_COMMIT_TRIM_OFF = os.getenv("VLLM_BT_TRIM_OFF_FILE", "/work/bt_trim_off")
 
 
 class SlotMappingMode(Enum):
@@ -82,6 +89,25 @@ class BlockTable:
             self.max_num_reqs, self.max_num_blocks_per_req, dtype=torch.int32
         )
         self.num_blocks_per_row = np.zeros(max_num_reqs, dtype=np.int32)
+
+        # Staging buffer for the per-step block-table HtoD copy. The full
+        # buffer is max_model_len wide, but a decode step only needs the
+        # columns actually populated, which is orders of magnitude fewer.
+        # Copying a 2-D column slice directly falls off a cliff in torch once
+        # the slice exceeds 128 KiB (it degrades to a synchronous staged path,
+        # ~7.5 ms), so pack into a contiguous pinned buffer instead and let
+        # the strided scatter happen device-side.
+        self._commit_capacity = min(
+            self.max_num_reqs * self.max_num_blocks_per_req, 4 * 1024 * 1024
+        )
+        self._commit_stage = self._make_buffer(
+            self._commit_capacity, dtype=torch.int32
+        )
+        # High-water mark over all columns ever committed. clear_row/move_row
+        # zero a row on the CPU side and then reset num_blocks_per_row, so the
+        # live maximum alone would leave those zeros stranded on the GPU. The
+        # mark only shrinks on clear(), which zeroes both sides.
+        self._commit_high_water = 0
 
         self.slot_mapping = self._make_buffer(
             self.max_num_batched_tokens, dtype=torch.int64
@@ -187,11 +213,45 @@ class BlockTable:
         )
 
     def commit_block_table(self, num_reqs: int) -> None:
-        self.block_table.copy_to_gpu(num_reqs)
+        num_cols = self._commit_num_cols(num_reqs)
+        if num_cols < 0:
+            self.block_table.copy_to_gpu(num_reqs)
+            return
+        if num_cols == 0:
+            return
+        n = num_reqs * num_cols
+        self._commit_stage.np[:n].reshape(num_reqs, num_cols)[:] = self.block_table.np[
+            :num_reqs, :num_cols
+        ]
+        self._commit_stage.copy_to_gpu(n)
+        self.block_table.gpu[:num_reqs, :num_cols].copy_(
+            self._commit_stage.gpu[:n].view(num_reqs, num_cols), non_blocking=True
+        )
+
+    def _commit_num_cols(self, num_reqs: int) -> int:
+        """Columns to copy this step, or -1 to fall back to the full copy.
+
+        Mamba-style groups are excluded: their rows are dereferenced as state
+        slots wholesale, so a row zeroed by move_row/clear_row must have those
+        zeros reach the GPU even past the current high-water column.
+        """
+        if self.slot_mapping_mode == SlotMappingMode.NONE or os.path.exists(
+            _COMMIT_TRIM_OFF
+        ):
+            return -1
+        num_cols = max(
+            self._commit_high_water,
+            int(self.num_blocks_per_row[:num_reqs].max(initial=0)),
+        )
+        if num_reqs * num_cols > self._commit_capacity:
+            return -1
+        self._commit_high_water = num_cols
+        return num_cols
 
     def clear(self) -> None:
         self.block_table.gpu.fill_(0)
         self.block_table.cpu.fill_(0)
+        self._commit_high_water = 0
 
     @staticmethod
     def map_to_kernel_blocks(
