@@ -564,6 +564,11 @@ static __global__ __launch_bounds__(kNumThreadsPerBlock) void topKPerRowPrefill(
       nullptr, logits, rowStart, rowEnd, outIndices, nullptr, stride1, topK);
 }
 
+// Rows at least this long are worth splitting across multiple blocks. Measured
+// crossover on gfx950 is ~150K; below it the single-block path wins by up to
+// 2.6x at a 9K context. Shared by the device-side branch and the host dispatch.
+static constexpr int kSplitWorkThreshold = 200 * 1000;
+
 template <int kNumThreadsPerBlock, bool useRadixSort,
           bool multipleBlocksPerRow = false, bool mergeBlocks = false>
 static __global__ __launch_bounds__(kNumThreadsPerBlock) void topKPerRowDecode(
@@ -590,21 +595,43 @@ static __global__ __launch_bounds__(kNumThreadsPerBlock) void topKPerRowDecode(
   int rowEnd =
       seqLensIs2D ? max(0, seq_len) : max(0, seq_len - next_n + next_n_idx + 1);
 
+  // The host dispatch branches on logits.size(1) -- the width of a preallocated
+  // [rows, max_model_len] workspace, not the real context -- and under CUDA
+  // graphs that branch is frozen at capture time. Decide here instead, from the
+  // seq_len this block just read off the GPU. Must be computed before rowEnd is
+  // narrowed to this block's slice below, or a 1M row would be judged by its
+  // 105K slice.
+  const bool splitIsWorthIt = rowEnd >= kSplitWorkThreshold;
+
   // Local pointers to this block
   if constexpr (!multipleBlocksPerRow && !mergeBlocks) {
     outIndices += static_cast<int64_t>(rowIdx) * topK;
   } else if constexpr (multipleBlocksPerRow) {
-    const auto blockSize = rowEnd / gridDim.y;  // 16384 / 2 = 8192
-    rowStart = blockSize * blockIdx.y;          // 8192 * 1 = 8192
-    rowEnd = gridDim.y == blockIdx.y + 1 ? rowEnd : rowStart + blockSize;
+    if (!splitIsWorthIt) {
+      // Short row: block 0 scans it whole, the rest have nothing to do. Its
+      // topK results land in slot 0 of the aux buffer and the merge kernel
+      // copies them out; blocks 1..N-1 leave their slots untouched.
+      if (blockIdx.y != 0) return;
+    } else {
+      const auto blockSize = rowEnd / gridDim.y;  // 16384 / 2 = 8192
+      rowStart = blockSize * blockIdx.y;          // 8192 * 1 = 8192
+      rowEnd = gridDim.y == blockIdx.y + 1 ? rowEnd : rowStart + blockSize;
+    }
     outIndices +=
         static_cast<int64_t>(rowIdx) * gridDim.y * topK + blockIdx.y * topK;
     outLogits +=
         static_cast<int64_t>(rowIdx) * gridDim.y * topK + blockIdx.y * topK;
   } else if constexpr (mergeBlocks) {
-    rowEnd = numBlocksToMerge * topK;
     indices += static_cast<int64_t>(rowIdx) * numBlocksToMerge * topK;
     outIndices += static_cast<int64_t>(rowIdx) * topK;
+    if (!splitIsWorthIt) {
+      // Stage 1 put the row's complete answer in aux slot 0. Copy, don't merge.
+      for (int i = threadIdx.x; i < topK; i += kNumThreadsPerBlock) {
+        outIndices[i] = indices[i];
+      }
+      return;
+    }
+    rowEnd = numBlocksToMerge * topK;
   }
   logits += static_cast<int64_t>(rowIdx) * stride0;
 
@@ -663,7 +690,6 @@ void top_k_per_row_decode(const torch::stable::Tensor& logits, int64_t next_n,
                           torch::stable::Tensor& indices, int64_t numRows,
                           int64_t stride0, int64_t stride1, int64_t topK) {
   constexpr int kSortingAlgorithmThreshold = 12288;
-  constexpr int kSplitWorkThreshold = 200 * 1000;
   constexpr int kNumThreadsPerBlock = 512;
   const torch::stable::accelerator::DeviceGuard device_guard(
       logits.get_device_index());
@@ -683,7 +709,7 @@ void top_k_per_row_decode(const torch::stable::Tensor& logits, int64_t next_n,
             indices.mutable_data_ptr<int>(), static_cast<int>(stride0),
             static_cast<int>(stride1), static_cast<int>(topK),
             static_cast<int>(next_n), seqLensIs2D);
-  } else if (numColumns < kSplitWorkThreshold) {
+  } else if (numColumns < vllm::kSplitWorkThreshold) {
     // From this threshold, use radix sort instead
     vllm::topKPerRowDecode<kNumThreadsPerBlock, true>
         <<<numRows, kNumThreadsPerBlock, topK * sizeof(int32_t), stream>>>(
