@@ -10,12 +10,14 @@ wired through ``vllm.v1.attention.backends.rocm_aiter_fa``:
 """
 
 import importlib
+import math
+from types import SimpleNamespace
 
 import pytest
 import torch
 
 from vllm.platforms import current_platform
-from vllm.platforms.rocm import on_mi3xx
+from vllm.platforms.rocm import on_gfx950, on_mi3xx
 from vllm.utils.torch_utils import set_random_seed
 
 pytestmark = pytest.mark.skipif(
@@ -329,6 +331,94 @@ def test_aiter_mha_backend_validates_kv_cache_block_size():
     )
 
 
+def test_aiter_diffkv_backend_contract():
+    """MiMo DiffKV exposes two padded planes and only accepts FP8 page-16."""
+    from vllm.v1.attention.backends.rocm_aiter_diffkv import (
+        AiterDiffKVAttentionBackend,
+    )
+    from vllm.v1.kv_cache_interface import FullAttentionSpec, KVCacheLayout
+
+    fp8_dtype = current_platform.fp8_dtype()
+    spec = AiterDiffKVAttentionBackend.customize_spec(
+        FullAttentionSpec(
+            block_size=16,
+            num_kv_heads=2,
+            head_size=192,
+            head_size_v=128,
+            dtype=fp8_dtype,
+        )
+    )
+    assert AiterDiffKVAttentionBackend.get_name() == "ROCM_AITER_DIFFKV"
+    assert AiterDiffKVAttentionBackend.supported_kv_cache_dtypes == [
+        "fp8",
+        "fp8_e4m3",
+    ]
+    assert AiterDiffKVAttentionBackend.get_supported_kernel_block_sizes() == [16]
+    assert AiterDiffKVAttentionBackend.supported_kv_cache_layouts() == (
+        KVCacheLayout.LHBNC,
+        KVCacheLayout.LBHNC,
+    )
+    assert spec.num_head_slots == 2
+    assert spec.state_content_size_bytes == 2 * 192
+
+    with pytest.raises(ValueError, match="block size 16"):
+        AiterDiffKVAttentionBackend.customize_spec(
+            FullAttentionSpec(
+                block_size=32,
+                num_kv_heads=2,
+                head_size=192,
+                head_size_v=128,
+                dtype=fp8_dtype,
+            )
+        )
+
+
+@pytest.mark.skipif(not on_gfx950(), reason="gfx950 only")
+def test_aiter_diffkv_shares_full_decode_plan_across_layers(monkeypatch):
+    """Build one work plan for full-attention layers sharing metadata."""
+    from vllm.v1.attention.backends.rocm_aiter_diffkv import (
+        AiterDiffKVAttentionImpl,
+    )
+
+    pa_decode_module = importlib.import_module("aiter.ops.flydsl.pa_decode")
+    plan_calls = 0
+
+    def plan_pa_decode(context_lengths, num_kv_heads, *, plan=None):
+        nonlocal plan_calls
+        plan_calls += 1
+        if plan is not None:
+            return plan
+        return SimpleNamespace(max_partitions=8, capacity=context_lengths.numel())
+
+    monkeypatch.setattr(pa_decode_module, "plan_pa_decode", plan_pa_decode)
+
+    def make_impl():
+        impl = object.__new__(AiterDiffKVAttentionImpl)
+        impl.num_heads = 32
+        impl.num_kv_heads = 2
+        impl.head_size_v = 128
+        impl._decode_workspace = {}
+        return impl
+
+    context_lengths = torch.full((4,), 8192, dtype=torch.int32)
+    query = torch.empty((4, 32, 192), dtype=torch.bfloat16)
+    metadata = SimpleNamespace()
+
+    first = make_impl()._get_full_decode_workspace(
+        context_lengths,
+        query,
+        metadata,
+    )
+    second = make_impl()._get_full_decode_workspace(
+        context_lengths,
+        query,
+        metadata,
+    )
+
+    assert first is second
+    assert plan_calls == 1
+
+
 def test_aiter_mha_backend_supports_compute_capability_matches_mi3xx_probe():
     """The backend should trust the ROCm MI3xx probe instead of the raw torch
     capability tuple."""
@@ -379,6 +469,140 @@ def test_aiter_mha_platform_gate_matches_install_and_arch():
 
     assert is_aiter_found_and_supported() is (
         current_platform.is_rocm() and on_mi3xx() and IS_AITER_FOUND
+    )
+
+
+@pytest.mark.skipif(not on_gfx950(), reason="gfx950 only")
+@pytest.mark.parametrize("sliding_window", [128, None])
+def test_aiter_diffkv_fp8_decode_matches_reference(sliding_window):
+    """Exercise cache-write plus SWA/direct and full/split FlyDSL decode."""
+    from vllm.v1.attention.backend import AttentionType
+    from vllm.v1.attention.backends.rocm_aiter_diffkv import (
+        AiterDiffKVAttentionImpl,
+    )
+    from vllm.v1.attention.backends.rocm_aiter_fa import (
+        AiterFlashAttentionDecodeMetadata,
+        AiterFlashAttentionMetadata,
+    )
+
+    _assert_aiter_supported()
+    set_random_seed(19)
+
+    lengths = [127, 128, 129, 257]
+    num_kv_heads = 2
+    query_group_size = 16
+    num_query_heads = num_kv_heads * query_group_size
+    head_size = 192
+    head_size_v = 128
+    block_size = 16
+    block_counts = [(length + block_size - 1) // block_size for length in lengths]
+    num_blocks = sum(block_counts)
+    block_table = torch.zeros((len(lengths), max(block_counts)), dtype=torch.int32)
+
+    slots = []
+    keys = []
+    values = []
+    first_block = 0
+    for seq_idx, length in enumerate(lengths):
+        block_ids = torch.arange(
+            first_block,
+            first_block + block_counts[seq_idx],
+            dtype=torch.int32,
+        )
+        block_table[seq_idx, : block_counts[seq_idx]] = block_ids
+        physical_slots = block_ids[:, None] * block_size + torch.arange(block_size)
+        slots.extend(physical_slots.flatten()[:length].tolist())
+        keys.append(
+            torch.randn(length, num_kv_heads, head_size, dtype=torch.bfloat16) * 0.2
+        )
+        values.append(
+            torch.randn(length, num_kv_heads, head_size_v, dtype=torch.bfloat16) * 0.2
+        )
+        first_block += block_counts[seq_idx]
+
+    key = torch.cat(keys)
+    value = torch.cat(values)
+    fp8_dtype = current_platform.fp8_dtype()
+    kv_cache = torch.zeros(
+        (num_blocks, 2, block_size, num_kv_heads * head_size),
+        dtype=fp8_dtype,
+    )
+    k_scale = (key.float().abs().max() / 400).clamp_min(1e-6).reshape(1)
+    v_scale = (value.float().abs().max() / 400).clamp_min(1e-6).reshape(1)
+    layer = SimpleNamespace(_k_scale=k_scale, _v_scale=v_scale)
+    impl = AiterDiffKVAttentionImpl(
+        num_heads=num_query_heads,
+        head_size=head_size,
+        scale=head_size**-0.5,
+        num_kv_heads=num_kv_heads,
+        alibi_slopes=None,
+        sliding_window=sliding_window,
+        kv_cache_dtype="fp8",
+        logits_soft_cap=None,
+        attn_type=AttentionType.DECODER,
+        kv_sharing_target_layer_name=None,
+        sinks=None,
+    )
+    impl.do_kv_cache_update(
+        layer,
+        key,
+        value,
+        kv_cache,
+        torch.tensor(slots, dtype=torch.int64),
+    )
+
+    query = (
+        torch.randn(len(lengths), num_query_heads, head_size, dtype=torch.bfloat16)
+        * 0.2
+    )
+    output = torch.empty(
+        len(lengths), num_query_heads, head_size_v, dtype=torch.bfloat16
+    )
+    query_start_loc = torch.arange(len(lengths) + 1, dtype=torch.int32)
+    metadata = AiterFlashAttentionMetadata(
+        num_actual_tokens=len(lengths),
+        query_start_loc=query_start_loc,
+        max_seq_len=max(lengths),
+        seq_lens=torch.tensor(lengths, dtype=torch.int32),
+        slot_mapping=torch.empty(0, dtype=torch.int64),
+        block_table=block_table,
+        causal=True,
+        num_decodes=len(lengths),
+        num_decode_tokens=len(lengths),
+        num_prefills=0,
+        num_extends=0,
+        num_extend_tokens=0,
+        decode_metadata=AiterFlashAttentionDecodeMetadata(1, 1),
+        prefill_metadata=None,
+        extend_metadata=None,
+        use_cascade=False,
+        k_scale=None,
+        v_scale=None,
+    )
+    impl.forward(layer, query, None, None, kv_cache, metadata, output)
+
+    references = []
+    for seq_idx, length in enumerate(lengths):
+        key_ref = (keys[seq_idx].float() / k_scale).to(fp8_dtype).float() * k_scale
+        value_ref = (values[seq_idx].float() / v_scale).to(fp8_dtype).float() * v_scale
+        if sliding_window is not None:
+            key_ref = key_ref[-sliding_window:]
+            value_ref = value_ref[-sliding_window:]
+        key_ref = key_ref.repeat_interleave(query_group_size, dim=1)
+        value_ref = value_ref.repeat_interleave(query_group_size, dim=1)
+        scores = torch.einsum(
+            "hd,khd->hk", query[seq_idx].float(), key_ref
+        ) / math.sqrt(head_size)
+        probabilities = torch.softmax(scores, dim=-1)
+        references.append(
+            torch.einsum("hk,khd->hd", probabilities, value_ref).to(torch.bfloat16)
+        )
+
+    torch.testing.assert_close(
+        output,
+        torch.stack(references),
+        atol=2e-2,
+        rtol=8e-2,
     )
 
 

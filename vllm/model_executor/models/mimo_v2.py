@@ -300,7 +300,8 @@ class MiMoV2Attention(nn.Module):
         # Use DiffKV backend when V has a different head dim than K.
         # Auto-pick FA-DiffKV when FA3/4 is usable on this device, else fall
         # back to TRITON_ATTN_DIFFKV.  Users can force a choice via
-        # `--attention-backend <FLASH_ATTN_DIFFKV|TRITON_ATTN_DIFFKV>`.
+        # `--attention-backend
+        # <FLASH_ATTN_DIFFKV|TRITON_ATTN_DIFFKV|ROCM_AITER_DIFFKV>`.
         if self.v_head_dim != self.head_dim:
             requested = get_current_vllm_config().attention_config.backend
             if requested is not None and requested.name.endswith("_DIFFKV"):
@@ -372,6 +373,10 @@ class MiMoV2FlashDecoderLayer(nn.Module):
         max_position_embeddings = getattr(config, "max_position_embeddings", 32768)
 
         v_scale = getattr(config, "attention_value_scale", None)
+        # Per-layer sliding windows below override the model-level setting.
+        cache_config = vllm_config.cache_config
+        if cache_config is not None:
+            cache_config.sliding_window = None
 
         if self.is_compressed_softmax_layer():
             self.self_attn = MiMoV2Attention(
@@ -389,6 +394,7 @@ class MiMoV2FlashDecoderLayer(nn.Module):
                 layer_id=layer_id,
                 rope_theta=getattr(config, "swa_rope_theta", rope_theta),
                 max_position_embeddings=max_position_embeddings,
+                cache_config=cache_config,
                 quant_config=quant_config,
                 partial_rotary_factor=getattr(config, "partial_rotary_factor", 1.0),
                 prefix=f"{prefix}.self_attn",
@@ -406,6 +412,7 @@ class MiMoV2FlashDecoderLayer(nn.Module):
                 layer_id=layer_id,
                 rope_theta=rope_theta,
                 max_position_embeddings=max_position_embeddings,
+                cache_config=cache_config,
                 quant_config=quant_config,
                 partial_rotary_factor=getattr(config, "partial_rotary_factor", 1.0),
                 prefix=f"{prefix}.self_attn",

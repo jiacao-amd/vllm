@@ -60,6 +60,9 @@ class AttentionBackendEnum(Enum, metaclass=_AttentionBackendEnumMeta):
     ROCM_AITER_FA = (
         "vllm.v1.attention.backends.rocm_aiter_fa.AiterFlashAttentionBackend"
     )
+    ROCM_AITER_DIFFKV = (
+        "vllm.v1.attention.backends.rocm_aiter_diffkv.AiterDiffKVAttentionBackend"
+    )
     ROCM_AITER_MLA_SPARSE = (
         "vllm.v1.attention.backends.mla.rocm_aiter_mla_sparse.ROCMAiterMLASparseBackend"
     )
