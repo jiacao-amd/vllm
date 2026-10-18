@@ -1,0 +1,81 @@
+{
+  "date_utc": "2026-10-18",
+  "kind": "portable_handoff_packaging_validation_not_performance",
+  "vllm_base_commit": "2a02f6efe319c885e3ccbcecde402e0028f9ec1e",
+  "base_image_id": "sha256:2695afe0011d4a5c9ab394a8252a590fe0c0ee4497d483e50606e996762952a7",
+  "cpu_checks": {
+    "exported_vllm_files_matching_base_commit": 381,
+    "baseline_vllm_and_aiter_files_checked": 392,
+    "independent_binary_patches_applied_and_hash_verified": 8,
+    "handoff_unit_tests_passed": 10,
+    "portable_probe_tests_passed": 15,
+    "ruff_new_tools_passed": true,
+    "ruff_probes_passed": true,
+    "probe_cleanup_style_exceptions": "I001/E501 only, to preserve original cleanup helper bytes",
+    "benchmark_client_help_with_actual_runner_identity_env": "passed",
+    "r8_workspace_and_tensor_view_cpu_import": "passed; torch.cuda.is_initialized() == false",
+    "earlier_manual_cpu_import_attempt": "Failed when USER/LOGNAME were omitted for a numeric UID absent from passwd. Retesting with the actual runner's HOME/USER/LOGNAME succeeded. No benchmark was involved."
+  },
+  "cpu_image_build_and_installed_byte_audits": {
+    "gpu_devices_exposed": false,
+    "a0": {
+      "image_id": "sha256:a5f0c85071677d00f4ba415d1affbe4bdc121c88e4d67763878cc0ab488481c6",
+      "files_checked": 392,
+      "passed": true
+    },
+    "r01_compile_prepare": {
+      "image_id": "sha256:5cd90a2c9a0dbf3d767131f2370c6623543ec0d46ffc8f03d52486c315d75591",
+      "files_checked": 392,
+      "passed": true
+    },
+    "r02_router": {
+      "image_id": "sha256:1137e442b52b3f36a7bbe00ffdd6b831ddd4e4ed0a6c5b844aa64f18677ec49a",
+      "files_checked": 392,
+      "passed": true
+    },
+    "r03_draft_metadata": {
+      "image_id": "sha256:5be36217340350c3d1d3a49c04f2f2d10d1823085a5026686322ff4d9d42b610",
+      "files_checked": 392,
+      "passed": true
+    },
+    "r04_sampling": {
+      "image_id": "sha256:eb3b6f466dbfe4d2211a8a12d44df1076c705efdb448976dd28d76af2cf35a29",
+      "files_checked": 395,
+      "passed": true
+    },
+    "r05_sparse_pa": {
+      "image_id": "sha256:42cd2291d3d06ee404905fb16ba958f869b88210a14b3150154ad396fb4c7c6b",
+      "files_checked": 394,
+      "passed": true
+    },
+    "r06_score_merge": {
+      "image_id": "sha256:b40207ffd3b5aa5e3500af0dc764de3d9ee4ff23685762c62d35f903cd5db997",
+      "files_checked": 401,
+      "passed": true
+    },
+    "r07_gemm1": {
+      "image_id": "sha256:0be29b7cfd85f6cec261817d456c9a0f093a425b7f465bd7be0df33a673ce48a",
+      "files_checked": 397,
+      "passed": true
+    },
+    "r08_gemm2_tp": {
+      "image_id": "sha256:b570c621505d0ff6e473234de3525d66f693a7aea2f3c3ab583dd597988c58c8",
+      "files_checked": 406,
+      "passed": true
+    },
+    "note": "These CPU validation images predate addition of this report file. Their kernel payloads, client, protocol and runtime/probe tools are the validated versions. Destination builds will have different wrapper image IDs; the A0 parent ID and pinned source/payload hashes must match."
+  },
+  "not_run": [
+    "GPU kernel microbenchmarks",
+    "GPU numerical probes",
+    "Model correctness or evaluations on the packaged images",
+    "Any new E2E benchmark",
+    "Full upstream pre-commit suite: archive commits preserve immutable historical payload/probe bytes and use the separate tests above; shared hook configuration is not changed."
+  ],
+  "portable_probe_sha256": "2b70d6dc84f576fccd10021ed7f92a44ff59f8f73fa753b4652c4206f2514aed",
+  "run_arm_sha256": "b258ee621ac5272279c1865ae4c8866c7a28de036a3794c7c93a9a8441ff833b",
+  "compare_results_sha256": "8314ce17eec8b5103a7686f1d11134ed3e236124f4ae9337cdfdc4bf68b85f62",
+  "accepted_a48_baseline_unchanged_sha256": "2f87a6d93428d29587bcd8b3fa8a051ed64cdf624fcdca9ff70df94ac15dfcf9",
+  "performance_claim": null,
+  "destination_e2e_http_warmup_requests": 0
+}

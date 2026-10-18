@@ -1,0 +1,171 @@
+{
+  "arm": "R4",
+  "base_image": "sha256:2695afe0011d4a5c9ab394a8252a590fe0c0ee4497d483e50606e996762952a7",
+  "correctness_and_performance": "Not tested; parent validation required",
+  "files": [
+    {
+      "a0_sha256": "14d15efaad32c174700569898d9ee778c72bad9194a1253dba0703c09da6e1ca",
+      "a33_sha256": "39f8ad02ae26a3ff5f1d7217b5e9451d8cfe12be8c85dcdf4f9bbbeda0e3bd7f",
+      "edits": [
+        {
+          "after": "    def compute_logits(self, hidden_states: torch.Tensor) -> torch.Tensor | None:\n        return self.logits_processor(self.lm_head, hidden_states)\n\n    def compute_logits_local(self, hidden_states: torch.Tensor) -> torch.Tensor:\n        return self.logits_processor(self.lm_head, hidden_states, skip_gather=True)\n",
+          "before": "    def compute_logits(self, hidden_states: torch.Tensor) -> torch.Tensor | None:\n        return self.logits_processor(self.lm_head, hidden_states)\n",
+          "count": 1,
+          "reason": "MiniMaxM3SparseForCausalLM: expose local logits"
+        },
+        {
+          "after": "    def compute_logits(self, hidden_states: torch.Tensor) -> torch.Tensor | None:\n        return self.language_model.compute_logits(hidden_states)\n\n    def compute_logits_local(self, hidden_states: torch.Tensor) -> torch.Tensor:\n        return self.language_model.compute_logits_local(hidden_states)\n",
+          "before": "    def compute_logits(self, hidden_states: torch.Tensor) -> torch.Tensor | None:\n        return self.language_model.compute_logits(hidden_states)\n",
+          "count": 1,
+          "reason": "MiniMaxM3SparseForConditionalGeneration: expose local logits"
+        }
+      ],
+      "operation": "minimal-A0-sampling-patch",
+      "output_sha256": "146f4e76a4de9fb338ed582c2af1c60d1ffe43e1028d1d04712e74e78c2f74e0",
+      "path": "vllm/models/minimax_m3/amd/model.py"
+    },
+    {
+      "a0_sha256": "3ad4addad3205419a095e94ad345d9379112eda320ee9dec336f2b7b16ccae49",
+      "a33_sha256": "ac19e8111add6eff7ebc2c2461a0af8feaf817011650eac986bb5d3f0318b8b4",
+      "edits": [
+        {
+          "after": "from vllm.v1.worker.gpu.spec_decode.sharded_greedy_rejection_sampler import (\n    ShardedGreedyVerifier,\n    create_sharded_greedy_verifier,\n)\nfrom vllm.v1.worker.gpu.spec_decode.speculator import DraftModelSpeculator\n",
+          "before": "from vllm.v1.worker.gpu.spec_decode.speculator import DraftModelSpeculator\n",
+          "count": 1,
+          "reason": "Import optional target sampler"
+        },
+        {
+          "after": "        self.batch_sharder: BatchSharder | None = None\n        self.sharded_greedy_verifier: ShardedGreedyVerifier | None = None\n",
+          "before": "        self.batch_sharder: BatchSharder | None = None\n",
+          "count": 1,
+          "reason": "Initialize optional target sampler state"
+        },
+        {
+          "after": "            self.sharded_greedy_verifier = create_sharded_greedy_verifier(\n                self.model, self.rejection_sampler, self.speculator, self.vllm_config\n            )\n            self.prompt_logprobs_worker = PromptLogprobsWorker(\n",
+          "before": "            self.prompt_logprobs_worker = PromptLogprobsWorker(\n",
+          "count": 1,
+          "reason": "Validate and construct target sampler after native sampler initialization"
+        },
+        {
+          "after": "        if self.sharded_greedy_verifier is not None:\n            output = self.sharded_greedy_verifier.try_sample(\n                hidden_states, input_batch, grammar_output\n            )\n            if output is not None:\n                return output, output.num_sampled, output.num_rejected\n        shard_metadata = None\n        global_input_batch = input_batch\n",
+          "before": "        shard_metadata = None\n        global_input_batch = input_batch\n",
+          "count": 1,
+          "reason": "Attempt eligible target sampling before full-logit materialization"
+        }
+      ],
+      "operation": "minimal-A0-sampling-patch",
+      "output_sha256": "ac19e8111add6eff7ebc2c2461a0af8feaf817011650eac986bb5d3f0318b8b4",
+      "path": "vllm/v1/worker/gpu/model_runner.py"
+    },
+    {
+      "a0_sha256": "6443d873f066c4f78b090d5afacea4a675b0b3757a4b1f4e9573cda3cc11f480",
+      "a33_sha256": "c7a4d7941215e2eafc12e4090bc7c073fbe996188c929c90ddd3ac0637dedbc8",
+      "edits": [
+        {
+          "after": "import os\nfrom abc import ABC, abstractmethod\n",
+          "before": "from abc import ABC, abstractmethod\n",
+          "count": 1,
+          "reason": "Read private draft experiment switch"
+        },
+        {
+          "after": "        self.use_local_argmax_reduction = (\n            self.speculative_config.use_local_argmax_reduction\n        )\n        self._use_minimax_fused_draft_argmax = False\n",
+          "before": "        self.use_local_argmax_reduction = (\n            self.speculative_config.use_local_argmax_reduction\n        )\n",
+          "count": 1,
+          "reason": "Default private draft sampling path off"
+        },
+        {
+          "after": "        self.model = self.load_draft_model(target_model, target_attn_layer_names)\n        self._configure_minimax_draft_argmax()\n",
+          "before": "        self.model = self.load_draft_model(target_model, target_attn_layer_names)\n",
+          "count": 1,
+          "reason": "Check draft model and identity vocabulary once after loading"
+        },
+        {
+          "after": "    def _configure_minimax_draft_argmax(self) -> None:\n        \"\"\"Enable the private experiment only for its validated model contract.\"\"\"\n        if os.environ.get(\"MM3_FUSED_DRAFT_ARGMAX_EXPERIMENT\") != \"1\":\n            return\n        from vllm.platforms import current_platform\n\n        config = self.vllm_config\n        head = getattr(self.model, \"lm_head\", None)\n        processor = getattr(self.model, \"logits_processor\", None)\n        if (\n            not current_platform.is_rocm()\n            or config.model_config.hf_config.model_type != \"minimax_m3_vl\"\n            or config.parallel_config.tensor_parallel_size != 4\n            or config.parallel_config.pipeline_parallel_size != 1\n            or config.lora_config is not None\n            or self.speculative_config.method != \"eagle3\"\n            or self.speculative_config.draft_sample_method != \"greedy\"\n            or head is None\n            or processor is None\n            or head.tp_size != 4\n            or head.embedding_dim != 6144\n            or head.weight.dtype != torch.bfloat16\n            or processor.org_vocab_size != 200064\n            or processor.scale != 1.0\n            or processor.soft_cap is not None\n        ):\n            raise ValueError(\n                \"Fused draft argmax requires MiniMax-M3 TP4 BF16 greedy Eagle3\"\n            )\n        mapping = getattr(self.model, \"draft_id_to_target_id\", None)\n        if mapping is not None and (\n            mapping.numel() != processor.org_vocab_size\n            or torch.count_nonzero(mapping).item() != 0\n        ):\n            raise ValueError(\"Fused draft argmax requires identity draft-to-target IDs\")\n        self._use_minimax_fused_draft_argmax = True\n        logger.info(\n            \"MiniMax-M3 fused draft argmax enabled: original BF16 LM head, \"\n            \"compact rank-major partials, no full-vocabulary gather or scatter\"\n        )\n\n    def _greedy_sample_draft(self, hidden_states: torch.Tensor) -> torch.Tensor:\n        if self._use_minimax_fused_draft_argmax:\n            from vllm.models.minimax_m3.amd.ops.draft_argmax import (\n                identity_vocab_top_tokens,\n            )\n\n            return identity_vocab_top_tokens(self.model, hidden_states)\n        if self.use_local_argmax_reduction:\n            return self.model.get_top_tokens(hidden_states)\n        logits = self.model.compute_logits(hidden_states)\n        return logits.argmax(dim=-1)\n",
+          "before": "    def _greedy_sample_draft(self, hidden_states: torch.Tensor) -> torch.Tensor:\n        if self.use_local_argmax_reduction:\n            return self.model.get_top_tokens(hidden_states)\n        logits = self.model.compute_logits(hidden_states)\n        return logits.argmax(dim=-1)\n",
+          "count": 1,
+          "reason": "Add validated draft branch; retain A0 fallback"
+        }
+      ],
+      "operation": "minimal-A0-sampling-patch",
+      "output_sha256": "c7a4d7941215e2eafc12e4090bc7c073fbe996188c929c90ddd3ac0637dedbc8",
+      "path": "vllm/v1/worker/gpu/spec_decode/speculator.py"
+    },
+    {
+      "a0_sha256": null,
+      "a33_sha256": "fa149828276374309f2d0eec338db7b8a11fe3d24ad4011e4aee7060adf36d9b",
+      "edits": [],
+      "operation": "byte-pinned-sampling-only-helper",
+      "output_sha256": "fa149828276374309f2d0eec338db7b8a11fe3d24ad4011e4aee7060adf36d9b",
+      "path": "vllm/models/minimax_m3/amd/ops/draft_argmax.py"
+    },
+    {
+      "a0_sha256": null,
+      "a33_sha256": "b92fadf403ca5329bc26bd777b8434350a1c6e6b4a8b536173c27b34eab5f8c8",
+      "edits": [],
+      "operation": "byte-pinned-sampling-only-helper",
+      "output_sha256": "b92fadf403ca5329bc26bd777b8434350a1c6e6b4a8b536173c27b34eab5f8c8",
+      "path": "vllm/v1/worker/gpu/spec_decode/sharded_greedy_rejection_sampler.py"
+    },
+    {
+      "a0_sha256": null,
+      "a33_sha256": "f717f71dcf1f4582eacd01ee0a59db812cdbb6490efbec675d4ddb53adff65a4",
+      "edits": [
+        {
+          "name": "vllm.triton_utils",
+          "operation": "retain-exact-source-node",
+          "source_fragment_sha256": "b1f09cfa2ad6176be96168da2fbf03b28fa72a6b9e0e5130cfe8f8734ac749cb"
+        },
+        {
+          "name": "vllm.v1.worker.gpu.sample.gumbel",
+          "operation": "retain-exact-source-node",
+          "source_fragment_sha256": "b7a438159b6591ef77c28071efeaa4d92d2e90f204b2822f87e259ecaeedac3d"
+        },
+        {
+          "name": "vllm.v1.worker.gpu.spec_decode.rejection_sampler_utils",
+          "operation": "retain-exact-source-node",
+          "source_fragment_sha256": "7a3441e79a589579558534ce7de4a409ca2e1285293e906b3f491c4d2b1fa6c9"
+        },
+        {
+          "name": "_greedy_global_argmax",
+          "operation": "retain-exact-source-node",
+          "source_fragment_sha256": "f91054aeb3d1a082ccbd87d712d2ac8a836169ca03e1fef4e3ec4529337fbd51"
+        },
+        {
+          "name": "_greedy_verify_and_count",
+          "operation": "retain-exact-source-node",
+          "source_fragment_sha256": "21c5c748edc1b389205e78101766e3017341d68cdd7b0ce2db5513d389569e6e"
+        }
+      ],
+      "operation": "derive-required-A33-kernel-dependency",
+      "output_sha256": "c3a3a4980de75a687d20a8d8ea82908b6756be54a94c24944dbb8e5462618dc5",
+      "path": "vllm/v1/worker/gpu/spec_decode/greedy_rejection_sampler.py"
+    }
+  ],
+  "gpu_executed": false,
+  "independent_of_other_arms": true,
+  "local_contract_sha256": {
+    "Dockerfile": "c35810bd09529fb829b92cbfa78e8ede9fc8d39a9a38a0531b2941e3f3d8fe0f",
+    "plan.json": "4262b9e80084fa6f4338258a0d2b111828e4c8852a028790186ebfa2869e8991",
+    "prepare.py": "56879659cf256515cd503a978dc657df3d3bd837349072b833b6c64d364cab40",
+    "verify_activation.py": "cdbbc7539af8b500184487747f94e50c884b474198268c4385e38d87913a484d"
+  },
+  "sampling_donor_image": "sha256:b72c277384a0cea80bf82bfc9d2d1e7563a772dc3adcf84f9da592e2a2f718e5",
+  "schema_version": 1,
+  "source_manifest_sha256": {
+    "a0": "086b1e9d5ff4d6980c84f064730e1f204cc11ed87044d0d5d00a7b932c11a227",
+    "a33": "507ba2eb77d126d1074dfc723c97646963f546c3edb95b7019b41bbe64d9c9ae"
+  },
+  "unchanged_api_sha256": {
+    "vllm/distributed/parallel_state.py": "28dfcc65cac2abce0822d987118eb13db81d56bcd4754daf763d079740bff5b7",
+    "vllm/model_executor/layers/logits_processor.py": "6b0603d67b0c756253c2fdc882a3896d2e873a16e9aa2ef877aabca8d36bdb5f",
+    "vllm/model_executor/layers/vocab_parallel_embedding.py": "d42574ac79bd7d7847548784d2272c7c40cbd93fe6cdadb15e8c2db79d2074d7",
+    "vllm/v1/worker/gpu/input_batch.py": "59b91bba8afe8382b86de24bc6eb8e44dfc1c08db5f60804a40ef8f3e76db5ce",
+    "vllm/v1/worker/gpu/sample/gumbel.py": "3ec1df510bdad13e8b0a457b5b67c98affdf6e57369e56cb471246cc8f40dd34",
+    "vllm/v1/worker/gpu/sample/output.py": "d6e298c0f197d487a8faaf7200f500fa83df1d7a4bbf4339cadd6a18008f7f9c",
+    "vllm/v1/worker/gpu/sample/sampler.py": "832c9945d201a1e730ff9b4b52076aa83bd4a5064e1e4cfea952cf84d4a8d1f0",
+    "vllm/v1/worker/gpu/spec_decode/autoregressive/speculator.py": "74ab4d19eeef958f2952a7bb736d591013acc4c177e3aba83ddb73e012e7d392",
+    "vllm/v1/worker/gpu/spec_decode/eagle/speculator.py": "746e318a4f266d75522ff7f3731ea9b4527b7b4824f71364d1a62184ea1f7b3d",
+    "vllm/v1/worker/gpu/spec_decode/rejection_sampler.py": "e20adc9b6c8a62a5be232bae15a1e361e898142966a68ea3ef244b39ffc5ce44",
+    "vllm/v1/worker/gpu/spec_decode/rejection_sampler_utils.py": "20ca2e5ac34e9ef93dca388bed72a00d4ff67d569ec6ec2393b21a92d74a1fae"
+  }
+}

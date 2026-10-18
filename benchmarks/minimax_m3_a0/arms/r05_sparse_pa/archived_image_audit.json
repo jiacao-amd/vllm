@@ -1,0 +1,27 @@
+{
+  "passed": true,
+  "image_id": "sha256:f89a3d578396d1559b6724f56dcb5202c8d60a34755529c977b664454ffde7fc",
+  "base_image_id": "sha256:2695afe0011d4a5c9ab394a8252a590fe0c0ee4497d483e50606e996762952a7",
+  "checked_source_files": 394,
+  "unchanged_a0_source_files": 391,
+  "changed_files": [
+    {
+      "path": "vllm/models/minimax_m3/amd/ops/sparse_pa.py",
+      "a0_sha256": "75eeb0751994058e6741877c81cb8c2192a2a4011a6b70548a06f6d3ff686f80",
+      "candidate_sha256": "86f4c01de49b15884c8c8819299b6f984f5a119c06319c326f9cbd6557b4405a"
+    },
+    {
+      "path": "vllm/models/minimax_m3/amd/ops/sparse_pa_partition.py",
+      "a0_sha256": null,
+      "candidate_sha256": "2338c335a4e111acb7b7ab1a672ae44a1d1020a395842cb6efc1fa1c82d0dc16"
+    },
+    {
+      "path": "vllm/models/minimax_m3/amd/ops/sparse_pa_partition_runtime.py",
+      "a0_sha256": null,
+      "candidate_sha256": "bf8d658a09327bd42d123c8ffa3c183c6bf5d3f2cca7d939e7e98b7c016a8248"
+    }
+  ],
+  "patch_manifest_sha256": "8252ff49f7ecff36020bcb171e7b0c45f7cf8c2b329b3988deaaf21a618d199b",
+  "plan_sha256": "90cbc88e9a1ac285c3a14a34d2fad870365eb85d9cf7e5352ec326474620924a",
+  "gpu_executed": false
+}

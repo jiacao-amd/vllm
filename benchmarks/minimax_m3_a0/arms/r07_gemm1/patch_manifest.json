@@ -1,0 +1,43 @@
+{
+  "arm": "R7",
+  "base_image": "sha256:2695afe0011d4a5c9ab394a8252a590fe0c0ee4497d483e50606e996762952a7",
+  "g1_arithmetic_preserved_from_a48": true,
+  "gpu_executed": false,
+  "inputs": {
+    "a0/aiter/fused_moe.py": "504680065ae94fdc550eaf219aafad45a1e73b9c73caeeb5675ff7fc406d408a",
+    "a0/aiter/ops/flydsl/kernels/moe_2stage_a16wmix/gemm1.py": "b590a9a47c7564d640815381aef8c503f91d498126a7c9a0475047d5d2670e26",
+    "a0/aiter/ops/flydsl/kernels/moe_2stage_a16wmix/gemm2.py": "b4edef8594131f9d138aba0458e671fb84cf30314433139fa180f7d4a33a203c",
+    "a0/aiter/ops/flydsl/kernels/moe_2stage_a16wmix/utils.py": "7b501832fdf6ff716e5bf7d3798ad40381489b778f2695579b47862bc50faef0",
+    "a0/aiter/ops/flydsl/kernels/mxfp4_gemm_common.py": "8972e9d4f3b1611d945ffa4b6d4200b2402e5bd2e4149cd6995b851f0232d33d",
+    "a0/aiter/ops/flydsl/moe_kernels.py": "79bc4526068da2418cc7c21501d778fa7c8a46f555bc8720ff4dede2d73f0a60",
+    "a0/vllm/models/minimax_m3/amd/model.py": "14d15efaad32c174700569898d9ee778c72bad9194a1253dba0703c09da6e1ca",
+    "a48/aiter/ops/flydsl/kernels/moe_2stage_a16wmix/gemm1.py": "3ceeef439afff4f8c95318cfd47728d134da9f05d03f18e65f74279c30016641",
+    "a48/aiter/ops/flydsl/kernels/moe_2stage_a16wmix/gemm2.py": "b4edef8594131f9d138aba0458e671fb84cf30314433139fa180f7d4a33a203c",
+    "a48/aiter/ops/flydsl/kernels/moe_2stage_a16wmix/utils.py": "7b501832fdf6ff716e5bf7d3798ad40381489b778f2695579b47862bc50faef0",
+    "a48/aiter/ops/flydsl/kernels/mxfp4_gemm_common.py": "8972e9d4f3b1611d945ffa4b6d4200b2402e5bd2e4149cd6995b851f0232d33d",
+    "a48/aiter/ops/flydsl/moe_kernels.py": "79bc4526068da2418cc7c21501d778fa7c8a46f555bc8720ff4dede2d73f0a60",
+    "a48/vllm/models/minimax_m3/amd/ops/_a45_g1/fixed_g1.py": "2f8f495c8c14a24c8b87ecf1164eecdadd76ed648e0a2bb7955b63d7d4ecdac6",
+    "local/integration.py": "019a34f238c116d3946e379e53aa4361a77b8c6345d697e210a1c5ffade7d812",
+    "supplemental/a0/aiter/ops/flydsl/kernels/act.py": "0602318cdc3ee64fcef18ad79d731848f26f479c7a2badb65046e7727e10ddee",
+    "supplemental/a48/aiter/ops/flydsl/kernels/act.py": "1632853f42132b68e082c5dea073bd6afaf2d00b9b87ec32952a0d75ca2a96bd"
+  },
+  "modified_a0_files": [
+    "vllm/models/minimax_m3/amd/model.py"
+  ],
+  "not_in_payload": [
+    "aiter/ops/flydsl/kernels/act.py",
+    "aiter/fused_moe.py",
+    "aiter/configs/tuned_fmoe.csv",
+    "moe_route_collective.py",
+    "moe_runner.py"
+  ],
+  "payload": {
+    "vllm/models/minimax_m3/amd/model.py": "df72f8a897ee150080160ba2678bbeb4c97fb11273403ad01eadac17b20fa527",
+    "vllm/models/minimax_m3/amd/ops/_r07_g1/__init__.py": "bfc2ed8bcc637d3bf2cd4060a2cf819a8316e2e1d00cb3530bd3d6caffa3cd1c",
+    "vllm/models/minimax_m3/amd/ops/_r07_g1/act.py": "1632853f42132b68e082c5dea073bd6afaf2d00b9b87ec32952a0d75ca2a96bd",
+    "vllm/models/minimax_m3/amd/ops/_r07_g1/fixed_g1.py": "a91ff74bf33f0a6fe7384fd8c6773e6efd5aee97185f3b26a1d4f154bc479c28",
+    "vllm/models/minimax_m3/amd/ops/_r07_g1/gemm1_slot.py": "c070c4ae26b94bbc0188285fde24822c36a476ef2b98df08d8dc2c3a7f61bcd1",
+    "vllm/models/minimax_m3/amd/ops/_r07_g1/integration.py": "019a34f238c116d3946e379e53aa4361a77b8c6345d697e210a1c5ffade7d812"
+  },
+  "prepare_sha256": "13197ddc524d08545f9bf49b1ee833afc814704061365bb9fce30f753f6dafd5"
+}

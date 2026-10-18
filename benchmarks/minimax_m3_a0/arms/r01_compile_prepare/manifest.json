@@ -1,0 +1,26 @@
+{
+  "arm": "r01_compile_prepare",
+  "base_image_id": "sha256:2695afe0011d4a5c9ab394a8252a590fe0c0ee4497d483e50606e996762952a7",
+  "independent_on_a0": true,
+  "patch_sha256": "7f615f3f921372d95b965295e9fa95d3f0ddfc18215b00329d09df2769f84531",
+  "files": {
+    "vllm/_custom_ops.py": {
+      "before_sha256": "04fed88fc45b5d314059be44e9b95a79f1c7ff2a5018004f805fe4a58672be71",
+      "after_sha256": "49af823c770b73f9e277d47e05bce86429f6b91d3c3e89fd5604dde79524cd28",
+      "bytes": 126992
+    },
+    "vllm/config/compilation.py": {
+      "before_sha256": "bae1a13054cfe318f62d0408161e90947e6aa7df325d6c08f89435fe3e149165",
+      "after_sha256": "e2f5da0fa634e50f47555d911de3fbed0b67e33fd94e42cbffd2923acfaa0eaa",
+      "bytes": 68924
+    },
+    "vllm/models/minimax_m3/amd/model.py": {
+      "before_sha256": "14d15efaad32c174700569898d9ee778c72bad9194a1253dba0703c09da6e1ca",
+      "after_sha256": "61b14eeab78f7877df2e411c6f80d47d8fddc160d4b20ff87b0c682f77112c4a",
+      "bytes": 81557
+    }
+  },
+  "environment": {},
+  "audit_environment": {},
+  "gpu_validation_of_packaged_version": false
+}

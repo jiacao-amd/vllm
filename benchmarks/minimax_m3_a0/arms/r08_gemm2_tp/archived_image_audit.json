@@ -1,0 +1,97 @@
+{
+  "passed": true,
+  "image_id": "sha256:dbbcec13aa27301721858b53c1942f9e7dc8d245a8d1121a190b9544dfef9e42",
+  "base_image_id": "sha256:2695afe0011d4a5c9ab394a8252a590fe0c0ee4497d483e50606e996762952a7",
+  "checked_source_files": 406,
+  "unchanged_a0_source_files": 389,
+  "changed_files": [
+    {
+      "path": "vllm/config/compilation.py",
+      "a0_sha256": "bae1a13054cfe318f62d0408161e90947e6aa7df325d6c08f89435fe3e149165",
+      "candidate_sha256": "6095134b2d9d8672f0b46c0f58564aee99b2ed14721dd07cdf14a943e3e87abd"
+    },
+    {
+      "path": "vllm/model_executor/layers/fused_moe/runner/moe_runner.py",
+      "a0_sha256": "635282a1a5dfdf3fa70a7d8f9b0f120abe9142ca921bac24f3037832158c2091",
+      "candidate_sha256": "2b9a4d76aa112417b88f1eb0321ca22fd882390737f28775c233845548f8424c"
+    },
+    {
+      "path": "vllm/models/minimax_m3/amd/model.py",
+      "a0_sha256": "14d15efaad32c174700569898d9ee778c72bad9194a1253dba0703c09da6e1ca",
+      "candidate_sha256": "7f7f029bbf250a4eb8f1ba74735ddf18b5816cc4e80a895a3cee7663ae713b07"
+    },
+    {
+      "path": "vllm/models/minimax_m3/amd/ops/moe_route_collective.py",
+      "a0_sha256": null,
+      "candidate_sha256": "1b0c785fc25b010940584351d71d270fd3a7dd47778fa9c98c5044b6f4854334"
+    },
+    {
+      "path": "vllm/models/minimax_m3/amd/ops/_moe_atomic_pipeline/mm3_a37_tensor_view.so",
+      "a0_sha256": null,
+      "candidate_sha256": "6b4d5dd8aa04bee3568c4117b3ebcae58c75c1954f4bb7b489cf7a9fb556f603"
+    },
+    {
+      "path": "vllm/models/minimax_m3/amd/ops/_moe_atomic_pipeline/atomic_state.py",
+      "a0_sha256": null,
+      "candidate_sha256": "7dc0b172cf7398d0766c3c9a8eb152bbebb79d87b84c98cc5382dc6c495337e6"
+    },
+    {
+      "path": "vllm/models/minimax_m3/amd/ops/_moe_atomic_pipeline/fused_atomic.py",
+      "a0_sha256": null,
+      "candidate_sha256": "de0bca161186d337d7b1b89224041bc03af4b787dddb20b6136c2fb5ec33853a"
+    },
+    {
+      "path": "vllm/models/minimax_m3/amd/ops/_moe_atomic_pipeline/layout.py",
+      "a0_sha256": null,
+      "candidate_sha256": "09ba71eaf419e55e3f906563d3cd801e6b9e565546431fd44195de90a0c215bd"
+    },
+    {
+      "path": "vllm/models/minimax_m3/amd/ops/_moe_atomic_pipeline/workspace.py",
+      "a0_sha256": null,
+      "candidate_sha256": "e7dedfe54a34b3cd2a812c8da43204267d22ae31f6bae913ed3d6c9cfd8175eb"
+    },
+    {
+      "path": "vllm/models/minimax_m3/amd/ops/_moe_atomic_pipeline/mm3_a36_workspace.so",
+      "a0_sha256": null,
+      "candidate_sha256": "df4c721282a849db04852c036bcd017146feea2d02dc065aa2fd52b71ba5d5bf"
+    },
+    {
+      "path": "vllm/models/minimax_m3/amd/ops/_moe_atomic_pipeline/fused_gemm2.py",
+      "a0_sha256": null,
+      "candidate_sha256": "ac0152ccf6775b59fb12b320ffbb4796e38ae2b58ae0c4fb14eb8998774ec2d4"
+    },
+    {
+      "path": "vllm/models/minimax_m3/amd/ops/_moe_atomic_pipeline/route_epilog_tiled.py",
+      "a0_sha256": null,
+      "candidate_sha256": "646ac71ea46c43bea4beca0427efdd36b3fab866a8fb6cfe54a9749808ac6f63"
+    },
+    {
+      "path": "vllm/models/minimax_m3/amd/ops/_moe_atomic_pipeline/route_epilog.py",
+      "a0_sha256": null,
+      "candidate_sha256": "658d7b4b88f04c2f54d6f2ee4a0a4df753d7e0d769aab5faed7f738f091f6462"
+    },
+    {
+      "path": "vllm/models/minimax_m3/amd/ops/_moe_atomic_pipeline/gemm2_slot.py",
+      "a0_sha256": null,
+      "candidate_sha256": "36bed4c34b760f816a206d2ca5e66248aed9d1f1cc9d66c852030ca312755227"
+    },
+    {
+      "path": "vllm/models/minimax_m3/amd/ops/_moe_atomic_pipeline/atomic_epilog.py",
+      "a0_sha256": null,
+      "candidate_sha256": "90c23f8a71ac7f87027867f079601bba2c35fcd51f968683e76504c7819f291c"
+    },
+    {
+      "path": "vllm/models/minimax_m3/amd/ops/_moe_atomic_pipeline/sort_clear.py",
+      "a0_sha256": null,
+      "candidate_sha256": "aa71adfc5fa6379b57fe87d48532d96e7e89eb56b708a3216eb08e30bfbb16eb"
+    },
+    {
+      "path": "vllm/models/minimax_m3/amd/ops/_moe_atomic_pipeline/__init__.py",
+      "a0_sha256": null,
+      "candidate_sha256": "24324eb8fe7ad4aafa25ae134e94d39bcaed5fbf49d73cd36925cd990ecbe5dd"
+    }
+  ],
+  "patch_manifest_sha256": "3beb9c6f5b3eb47af6785e5f9182269c3543dc89e6d724252f7780d47efbcb9a",
+  "plan_sha256": "35b0ed68f80d58f2b99a9393a2937e6531dd352dec759c978df2b87b81c03d09",
+  "gpu_executed": false
+}

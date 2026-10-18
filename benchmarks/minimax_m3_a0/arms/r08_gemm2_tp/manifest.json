@@ -1,0 +1,98 @@
+{
+  "arm": "r08_gemm2_tp",
+  "base_image_id": "sha256:2695afe0011d4a5c9ab394a8252a590fe0c0ee4497d483e50606e996762952a7",
+  "independent_on_a0": true,
+  "patch_sha256": "d950e16b27cac392b46a847a2093e4e79113ea5e7662820e076726e3404c32a1",
+  "files": {
+    "vllm/config/compilation.py": {
+      "before_sha256": "bae1a13054cfe318f62d0408161e90947e6aa7df325d6c08f89435fe3e149165",
+      "after_sha256": "6095134b2d9d8672f0b46c0f58564aee99b2ed14721dd07cdf14a943e3e87abd",
+      "bytes": 68991
+    },
+    "vllm/model_executor/layers/fused_moe/runner/moe_runner.py": {
+      "before_sha256": "635282a1a5dfdf3fa70a7d8f9b0f120abe9142ca921bac24f3037832158c2091",
+      "after_sha256": "2b9a4d76aa112417b88f1eb0321ca22fd882390737f28775c233845548f8424c",
+      "bytes": 39552
+    },
+    "vllm/models/minimax_m3/amd/model.py": {
+      "before_sha256": "14d15efaad32c174700569898d9ee778c72bad9194a1253dba0703c09da6e1ca",
+      "after_sha256": "7f7f029bbf250a4eb8f1ba74735ddf18b5816cc4e80a895a3cee7663ae713b07",
+      "bytes": 75422
+    },
+    "vllm/models/minimax_m3/amd/ops/_moe_atomic_pipeline/__init__.py": {
+      "before_sha256": null,
+      "after_sha256": "24324eb8fe7ad4aafa25ae134e94d39bcaed5fbf49d73cd36925cd990ecbe5dd",
+      "bytes": 46
+    },
+    "vllm/models/minimax_m3/amd/ops/_moe_atomic_pipeline/atomic_epilog.py": {
+      "before_sha256": null,
+      "after_sha256": "90c23f8a71ac7f87027867f079601bba2c35fcd51f968683e76504c7819f291c",
+      "bytes": 4337
+    },
+    "vllm/models/minimax_m3/amd/ops/_moe_atomic_pipeline/atomic_state.py": {
+      "before_sha256": null,
+      "after_sha256": "7dc0b172cf7398d0766c3c9a8eb152bbebb79d87b84c98cc5382dc6c495337e6",
+      "bytes": 2861
+    },
+    "vllm/models/minimax_m3/amd/ops/_moe_atomic_pipeline/fused_atomic.py": {
+      "before_sha256": null,
+      "after_sha256": "de0bca161186d337d7b1b89224041bc03af4b787dddb20b6136c2fb5ec33853a",
+      "bytes": 3867
+    },
+    "vllm/models/minimax_m3/amd/ops/_moe_atomic_pipeline/fused_gemm2.py": {
+      "before_sha256": null,
+      "after_sha256": "ac0152ccf6775b59fb12b320ffbb4796e38ae2b58ae0c4fb14eb8998774ec2d4",
+      "bytes": 14396
+    },
+    "vllm/models/minimax_m3/amd/ops/_moe_atomic_pipeline/gemm2_slot.py": {
+      "before_sha256": null,
+      "after_sha256": "36bed4c34b760f816a206d2ca5e66248aed9d1f1cc9d66c852030ca312755227",
+      "bytes": 17031
+    },
+    "vllm/models/minimax_m3/amd/ops/_moe_atomic_pipeline/layout.py": {
+      "before_sha256": null,
+      "after_sha256": "09ba71eaf419e55e3f906563d3cd801e6b9e565546431fd44195de90a0c215bd",
+      "bytes": 1849
+    },
+    "vllm/models/minimax_m3/amd/ops/_moe_atomic_pipeline/mm3_a36_workspace.so": {
+      "before_sha256": null,
+      "after_sha256": "df4c721282a849db04852c036bcd017146feea2d02dc065aa2fd52b71ba5d5bf",
+      "bytes": 256640
+    },
+    "vllm/models/minimax_m3/amd/ops/_moe_atomic_pipeline/mm3_a37_tensor_view.so": {
+      "before_sha256": null,
+      "after_sha256": "6b4d5dd8aa04bee3568c4117b3ebcae58c75c1954f4bb7b489cf7a9fb556f603",
+      "bytes": 232768
+    },
+    "vllm/models/minimax_m3/amd/ops/_moe_atomic_pipeline/route_epilog.py": {
+      "before_sha256": null,
+      "after_sha256": "658d7b4b88f04c2f54d6f2ee4a0a4df753d7e0d769aab5faed7f738f091f6462",
+      "bytes": 4049
+    },
+    "vllm/models/minimax_m3/amd/ops/_moe_atomic_pipeline/route_epilog_tiled.py": {
+      "before_sha256": null,
+      "after_sha256": "646ac71ea46c43bea4beca0427efdd36b3fab866a8fb6cfe54a9749808ac6f63",
+      "bytes": 4042
+    },
+    "vllm/models/minimax_m3/amd/ops/_moe_atomic_pipeline/sort_clear.py": {
+      "before_sha256": null,
+      "after_sha256": "aa71adfc5fa6379b57fe87d48532d96e7e89eb56b708a3216eb08e30bfbb16eb",
+      "bytes": 1546
+    },
+    "vllm/models/minimax_m3/amd/ops/_moe_atomic_pipeline/workspace.py": {
+      "before_sha256": null,
+      "after_sha256": "e7dedfe54a34b3cd2a812c8da43204267d22ae31f6bae913ed3d6c9cfd8175eb",
+      "bytes": 2964
+    },
+    "vllm/models/minimax_m3/amd/ops/moe_route_collective.py": {
+      "before_sha256": null,
+      "after_sha256": "1b0c785fc25b010940584351d71d270fd3a7dd47778fa9c98c5044b6f4854334",
+      "bytes": 5298
+    }
+  },
+  "environment": {
+    "MM3_MOE_ROUTE_COLLECTIVE_EXPERIMENT": "1"
+  },
+  "audit_environment": {},
+  "gpu_validation_of_packaged_version": false
+}

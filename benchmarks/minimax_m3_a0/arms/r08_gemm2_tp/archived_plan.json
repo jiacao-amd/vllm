@@ -1,0 +1,63 @@
+{
+  "a0_layout_audit": {
+    "actual_sort_BM": 16,
+    "g1": "Unchanged A0 CK-Tile split-K and standard postactivation",
+    "g1_output": "[96,5,768] BF16 token/slot layout",
+    "logged_BM32": "Preliminary heuristic; the later BF16/MXFP4 SwiGLU CK-Tile fallback returns BM16"
+  },
+  "arm": "R8",
+  "base_image": "sha256:2695afe0011d4a5c9ab394a8252a590fe0c0ee4497d483e50606e996762952a7",
+  "baseline": "../vllm_c24_baseline/vllm_c24_8k1k.json",
+  "baseline_retimed": false,
+  "checks": [
+    "Load the pinned Python3.12/PyTorch-compatible IPC/view modules; no library rebuild or pointer reinterpretation.",
+    "CPU slot-address proof and AST restoration, followed by parent codegen: SC1 packed BF16 atomics, no CAS, unchanged publication/consumer.",
+    "Fresh TP4 same-route A0 versus R8 numerical checks, poisoned IPC/output, padding and rank skew; A0 G1 must remain bitwise unchanged.",
+    "Local G2 comparison uses the existing 0.005 relative-L2 gate; TP output bitwise equals native cyclic-order TP of actual local results.",
+    "Verify exactly one redirected sorting clear and one R8 G2/TP per target MoE call, no extra layout/clear kernel and no duplicate outer MoE AR.",
+    "C4/prefill fallback uses native Stage1/Stage2 plus one TP reduction inside opaque call.",
+    "Every correctness-valid arm receives one independent fixed E2E against saved A0; no micro speed filter or baseline rerun."
+  ],
+  "env": {
+    "MM3_MOE_ROUTE_COLLECTIVE_EXPERIMENT": "1"
+  },
+  "forbidden_dispatch": [
+    "gemm1_a16w4_port_a16w4_h6144_i768_ne129_bm16_tn64",
+    "r07_gemm1_slot",
+    "mm3_a68"
+  ],
+  "gpu_validated": false,
+  "independent_of": [
+    "R1",
+    "R2",
+    "R3",
+    "R4",
+    "R5",
+    "R6",
+    "R7"
+  ],
+  "kernel_names": [
+    "mm3_r08_atomic_system_tp_v1_m96_cm1"
+  ],
+  "necessary_compatibility": [
+    "Private G2 A-loader maps each sorted packed token/slot to A0's original slot-indexed BF16 intermediate.",
+    "A-buffer bound is 96*5*768 BF16; invalid padded IDs select safe row0 and retain the native atomic token guard.",
+    "Intercept the A0 CK-Tile Stage2 ABI, not the absent A0 FlyDSL Stage2 selection; Stage1/metadata/sorting selection remain unchanged.",
+    "Use A37's always-reduced opaque MoE contract, including native TP reduction on non-M96 fallback.",
+    "Add only the static pre-reduced flag to the A0 runner and an identity-only compilation hash factor to prevent double/stale TP reduction."
+  ],
+  "prebuilt_libraries": {
+    "mm3_a36_workspace.so": "df4c721282a849db04852c036bcd017146feea2d02dc065aa2fd52b71ba5d5bf",
+    "mm3_a37_tensor_view.so": "6b4d5dd8aa04bee3568c4117b3ebcae58c75c1954f4bb7b489cf7a9fb556f603"
+  },
+  "topic": "A37 native-BF16 G2/TP and existing-sort clear reuse, retaining A0 G1",
+  "unchanged": [
+    "A0 G1 and activation",
+    "all sorting metadata and BM16",
+    "G2 MFMA/K/FP32 routing multiply/BF16 conversion/SC1 atomic rounding",
+    "24 counters and 64-bit epochs",
+    "both peer handshakes and owner-cyclic TP order",
+    "A37 IPC/view ownership and close protocol",
+    "A0 attention/router/sampling and compilation settings"
+  ]
+}

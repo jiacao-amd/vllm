@@ -1,0 +1,53 @@
+{
+  "base_image_id": "sha256:2695afe0011d4a5c9ab394a8252a590fe0c0ee4497d483e50606e996762952a7",
+  "source_vllm_commit": "2a02f6efe319c885e3ccbcecde402e0028f9ec1e",
+  "arms": {
+    "r01_compile_prepare": {
+      "manifest_sha256": "c707a02633fff4ce56cbd2e82df91d6589eb7b787357874aed1c760701e6f61f",
+      "patch_sha256": "7f615f3f921372d95b965295e9fa95d3f0ddfc18215b00329d09df2769f84531",
+      "files": 3
+    },
+    "r02_router": {
+      "manifest_sha256": "dc2ade7af84df9899c1d439852dd4b5e9b99f6d5d400c4546defc5ac52955b98",
+      "patch_sha256": "4528708f26b5060abab13cffe20e247a073cc5d0ba766427883cdc081fdd2bc7",
+      "files": 2
+    },
+    "r03_draft_metadata": {
+      "manifest_sha256": "6d353fdbbfd157f1e621cc60f7f46fb6405383b98d461f16917576d318678961",
+      "patch_sha256": "2ef6fb0e31512cc0d17d8c75fbe6a86cdbba017a71f22f2cb52b941d945d2e20",
+      "files": 2
+    },
+    "r04_sampling": {
+      "manifest_sha256": "e45528e42bbb3d3e0f039570da68e678229365ff761c80b8eabfce6cb9f12228",
+      "patch_sha256": "34e0de60b4dcf7e66d0fcacb1ca898a920a3d8814a3734250d882bbf609d2c7b",
+      "files": 6
+    },
+    "r05_sparse_pa": {
+      "manifest_sha256": "18207b8031ec5030f3f7b5f6a50b87d5e641b776b6c36f7595733126e68a7f77",
+      "patch_sha256": "39db727545a1071e75fbcb58b0ed47fbc9e297abcbb4eda0a1a3f3fb77a1b714",
+      "files": 3
+    },
+    "r06_score_merge": {
+      "manifest_sha256": "ff9708fcbd555aceb8d25ca971f44335c834813d99796b3fd16cf6d6bb6895fb",
+      "patch_sha256": "4d7275c0e6947c39c2462c995673d8c310fa3d366cd408494116df590d401314",
+      "files": 11
+    },
+    "r07_gemm1": {
+      "manifest_sha256": "3488b8319b08cb2d11bef06e31efefeb20af7605ec2730715ceaf6e1e5fecadd",
+      "patch_sha256": "48cced49fed0c5ef51ae13224882b5118c03df8e97de682891f3cc5ef06e7425",
+      "files": 6
+    },
+    "r08_gemm2_tp": {
+      "manifest_sha256": "bad92e0bbe8f1cdd9f18cdd3795ac91762265f6276eda840c9ea463e2c3d780b",
+      "patch_sha256": "d950e16b27cac392b46a847a2093e4e79113ea5e7662820e076726e3404c32a1",
+      "files": 17
+    }
+  },
+  "client_sha256": {
+    "backend_request_func.py": "4ebf482eb32685e59ed69bd39c51e9f1fd2134f5e9b8fe7ad10550d40ecca16c",
+    "benchmark_serving.py": "9bb3e5096ddc74398f8a33ec2dc7c787afa6ae7bf8f5dd2c8b2e387a280a7785",
+    "benchmark_utils.py": "b99a18940871b701e9e65c2cc098da1c5d33fc3f9d3890f8d2cddc539a9e3d51",
+    "encoding_dsv4.py": "bdbd57c132a1b3725042323d02b98b9d1df28e5f388f134399555d041f5055e0"
+  },
+  "note": "Archived plans are provenance, not the current zero-warmup protocol."
+}

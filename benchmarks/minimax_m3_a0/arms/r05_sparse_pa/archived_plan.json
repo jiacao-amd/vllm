@@ -1,0 +1,99 @@
+{
+  "arm": "R5",
+  "topic": "A38 hybrid sparse PA partition alignment, independently on A0",
+  "base_image_id": "sha256:2695afe0011d4a5c9ab394a8252a590fe0c0ee4497d483e50606e996762952a7",
+  "dependencies": {
+    "other_ablation_arms": [],
+    "native_pa_core": "aiter/ops/triton/gluon/pa_decode_gluon.py",
+    "native_pa_sha256": "cff95e80610211a87a0849c3ed666056cb6118ec73b10bbb0840a59ee2818743",
+    "wiring": "Insert only the guarded callable selection into A0 _run_gluon_decode. Read and clone the installed native PA module in memory; modify only the selected hybrid partition expression and kernel name.",
+    "donor_exclusions": [
+      "one-shot empty-output fix",
+      "K512 register-layout prototype",
+      "A39 merge",
+      "A41 score grid"
+    ],
+    "cache_isolation": "Separate cache directories, not cumulative vllm/envs.py or A1 compilation changes."
+  },
+  "changed_files": [
+    "vllm/models/minimax_m3/amd/ops/sparse_pa.py",
+    "vllm/models/minimax_m3/amd/ops/sparse_pa_partition.py",
+    "vllm/models/minimax_m3/amd/ops/sparse_pa_partition_runtime.py"
+  ],
+  "environment": {
+    "MM3_SPARSE_PA_PARTITION_EXPERIMENT": "1",
+    "VLLM_CACHE_ROOT": "/tmp/mm3-r05-vllm-cache",
+    "TRITON_CACHE_DIR": "/tmp/mm3-r05-triton-cache"
+  },
+  "forbidden_environment": [
+    "MM3_GROUPED_PA_MERGE_EXPERIMENT=1",
+    "MM3_INDEXER_SCORE_GRID_EXPERIMENT=1",
+    "MM3_MOE_ROUTE_COLLECTIVE_EXPERIMENT=1"
+  ],
+  "geometry": {
+    "query": [
+      96,
+      16,
+      128
+    ],
+    "query_dtype": "bfloat16",
+    "kv_dtype": "float8_e4m3fn",
+    "kv_heads_per_rank": 1,
+    "scratch_partitions": 6,
+    "compute_tile_tokens": 256,
+    "optimized_sparse_context_inclusive": [
+      1921,
+      2048
+    ],
+    "effective_long_partitions": 4,
+    "unused_long_partition_slots": [
+      4,
+      5
+    ],
+    "all_other_rows": "Exact native A0 partition rule; unsupported geometry or disabled switch delegates to native A0."
+  },
+  "kernel_verification": {
+    "optimized": "mm3_a38_paged_attention_head1_hybrid",
+    "retained_merge": "pa_decode_ps_reduce_hip_kernel",
+    "fallback": "paged_attention_decode_sliding_window_head_1",
+    "absent": [
+      "mm3_grouped_pa_merge_g2",
+      "mm3_a37_atomic_system_tp_v4_m96_cm1",
+      "mm3_a53_score_topk"
+    ],
+    "scope": "All four TP ranks in actual eligible M96 target execution; native fallback is allowed outside this scope.",
+    "score_policy": "A0 _score_split remains untouched; no cap432 override."
+  },
+  "checks": [
+    "python -B -m unittest discover -s . -p test_prepare.py -v; no torch/device import",
+    "python -B prepare.py; then python -B prepare.py --check; exclusive deterministic payload and manifest",
+    "Build-time CPU installed-source audit covers every unmodified exported A0 source plus the native PA core; an absent or mismatched core fails closed.",
+    "Parent: native A0 versus R5 eager/graph replay through context 0,1,127,128,129,1920,1921,1984,2048,2049 with poisoned scratch and unchanged KV.",
+    "Parent: short/unsupported rows bitwise native; optimized rows satisfy existing 0.02 absolute/relative tolerance versus BOTH native and ideal FP32 on identical quantized inputs. Do not widen tolerance.",
+    "Parent: verify slots 4/5 exp_sums zero, all selected tokens covered once, non-unit scalar KV scales, page IDs above 65535, threshold-crossing mixed rows, C4 correctness fallback.",
+    "Parent: C24 long-input correctness and C4 correctness, followed by actual optimized/native-merge kernel inspection on all four ranks.",
+    "Every correctness-valid R5 receives exactly one unprofiled fixed E2E against saved A0, even if flat or slower; no micro-speed gate."
+  ],
+  "fixed_e2e": {
+    "baseline": "../../vllm_c24_baseline/vllm_c24_8k1k.json",
+    "saved_a0_output_tokens_per_second": 2310.4520822142695,
+    "tp": 4,
+    "physical_gpus": [
+      4,
+      5,
+      6,
+      7
+    ],
+    "concurrency": 24,
+    "requests": 240,
+    "input_tokens": 8192,
+    "output_tokens": 1024,
+    "eagle3_draft_tokens": 3,
+    "synthetic_acceptance_length": 2.78,
+    "kv_cache_dtype": "fp8",
+    "block_size": 128,
+    "parent_runner_only": true,
+    "rerun_a0": false,
+    "resume_optimizer": false
+  }
+}

@@ -1,0 +1,397 @@
+diff --git a/vllm/_custom_ops.py b/vllm/_custom_ops.py
+index 5856acc..ec448c1 100644
+--- a/vllm/_custom_ops.py
++++ b/vllm/_custom_ops.py
+@@ -2722,6 +2722,37 @@ def fused_minimax_m3_qknorm_rope_kv_insert(
+     )
+ 
+ 
++if hasattr(torch.ops._C, "fused_minimax_m3_qknorm_rope_kv_insert"):
++
++    @register_fake("_C::fused_minimax_m3_qknorm_rope_kv_insert")
++    def _fused_minimax_m3_qknorm_rope_kv_insert_fake(
++        qkv: torch.Tensor,
++        q_norm_weight: torch.Tensor,
++        k_norm_weight: torch.Tensor,
++        cos_sin_cache: torch.Tensor,
++        positions: torch.Tensor,
++        num_heads: int,
++        num_kv_heads: int,
++        rotary_dim: int,
++        eps: float,
++        index_q_norm_weight: torch.Tensor | None,
++        index_k_norm_weight: torch.Tensor | None,
++        num_index_heads: int,
++        slot_mapping: torch.Tensor | None,
++        index_slot_mapping: torch.Tensor | None,
++        kv_cache: torch.Tensor | None,
++        index_cache: torch.Tensor | None,
++        block_size: int,
++        q_out: torch.Tensor | None,
++        index_q_out: torch.Tensor | None,
++        kv_cache_dtype: str,
++        skip_index_branch: bool = False,
++        q_fp8_out: torch.Tensor | None = None,
++        q_fp8_scale: float = 1.0,
++    ) -> None:
++        return None
++
++
+ def fused_kda_decode(
+     x: torch.Tensor,
+     weight: torch.Tensor,
+diff --git a/vllm/config/compilation.py b/vllm/config/compilation.py
+index 1219607..4420149 100644
+--- a/vllm/config/compilation.py
++++ b/vllm/config/compilation.py
+@@ -771,6 +771,7 @@ class CompilationConfig:
+         # Qwen4Exp's AMD backend still uses these splitting ops.
+         "vllm::qwen4_exp_ple_short_conv",
+         "vllm::qwen4_exp_qsa_with_output",
++        "vllm::minimax_m3_sparse_attention_with_output",
+         "vllm::linear_attention",
+         "vllm::qwen_gdn_attention_core",
+         "vllm::qwen_gdn_attention_core_fused_norm_packed",
+diff --git a/vllm/models/minimax_m3/amd/model.py b/vllm/models/minimax_m3/amd/model.py
+index 50cdb55..4a3e217 100644
+--- a/vllm/models/minimax_m3/amd/model.py
++++ b/vllm/models/minimax_m3/amd/model.py
+@@ -27,6 +27,7 @@ from vllm import _custom_ops as ops
+ from vllm import envs
+ from vllm._aiter_ops import rocm_aiter_ops
+ from vllm.compilation.breakable_cudagraph import eager_break_during_capture
++from vllm.compilation.decorators import support_torch_compile
+ from vllm.config import (
+     CacheConfig,
+     VllmConfig,
+@@ -122,8 +123,15 @@ from vllm.models.minimax_m3.common.sparse_attention import (
+ )
+ from vllm.models.minimax_m3.common.vision_tower import MiniMaxVLVisionModel
+ from vllm.multimodal import MULTIMODAL_REGISTRY
++from vllm.platforms import current_platform
+ from vllm.sequence import IntermediateTensors
+-from vllm.utils.torch_utils import kv_cache_dtype_str_to_dtype
++from vllm.utils.torch_utils import (
++    LayerNameType,
++    _encode_layer_name,
++    _resolve_layer_name,
++    direct_register_custom_op,
++    kv_cache_dtype_str_to_dtype,
++)
+ from vllm.v1.kv_cache_interface import (
+     FullAttentionSpec,
+     KVCacheSpec,
+@@ -134,6 +142,25 @@ from vllm.v1.kv_cache_interface import (
+ logger = init_logger(__name__)
+ 
+ 
++def _aiter_fused_qknorm_cache_insert_available() -> bool:
++    try:
++        import aiter
++    except ImportError:
++        return False
++    return bool(
++        getattr(
++            aiter,
++            "FUSED_QKNORM_IDXRQKNORM_SUPPORTS_PACKED_SHUFFLE",
++            False,
++        )
++        and getattr(
++            aiter,
++            "FUSED_QKNORM_IDXRQKNORM_SUPPORTS_FP8_INDEX_Q",
++            False,
++        )
++    )
++
++
+ def _sparse_attention_layer_ids(config: PretrainedConfig) -> set[int]:
+     """Layer ids whose attention runs the extra sparse "index" branch."""
+     cfg = getattr(config, "sparse_attention_config", None)
+@@ -742,6 +769,16 @@ class MiniMaxM3SparseAttention(nn.Module, AttentionLayerBase):
+         self.use_aiter_sparse_pa = minimax_m3_use_aiter_sparse_pa(
+             self.num_kv_heads, emits_sparse_block_table=self.indexer_emits_table
+         )
++        self.use_aiter_fused_qknorm_cache_insert = (
++            self.use_aiter_sparse_pa
++            and self.indexer_kv_dtype in ("fp8", "fp8_e4m3")
++            and _aiter_fused_qknorm_cache_insert_available()
++        )
++        if self.use_aiter_fused_qknorm_cache_insert:
++            logger.info_once(
++                "MiniMax M3 sparse attention: using fused AITER QK norm, "
++                "RoPE, packed KV-cache insert, and FP8 index-cache insert"
++            )
+         self.kv_cache_k = torch.tensor([])
+         self.kv_cache_v = torch.tensor([])
+         self._aiter_sparse_pa_cache_data_ptr = 0
+@@ -864,22 +901,10 @@ class MiniMaxM3SparseAttention(nn.Module, AttentionLayerBase):
+         self._ensure_aiter_sparse_pa_kv_cache()
+         return self.kv_cache_k, self.kv_cache_v
+ 
+-    def _insert_aiter_sparse_pa_kv(
++    def _prepare_aiter_sparse_pa_cache_insert(
+         self,
+-        k: torch.Tensor,
+-        v: torch.Tensor,
+-        index_k: torch.Tensor | None,
+         slot_mapping: torch.Tensor,
+-        index_slot_mapping: torch.Tensor | None,
+-    ) -> None:
+-        if self.kv_cache.numel() == 0:
+-            return
+-        from aiter import reshape_and_cache
+-
+-        from vllm.models.minimax_m3.amd.ops.sparse_pa import (
+-            minimax_m3_insert_index_cache,
+-        )
+-
++    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+         key_cache, value_cache = self.get_aiter_sparse_pa_kv_cache()
+         if value_cache.shape[0] != key_cache.shape[0]:
+             attn_metadata = get_forward_context().attn_metadata
+@@ -896,6 +921,27 @@ class MiniMaxM3SparseAttention(nn.Module, AttentionLayerBase):
+                     slot_mapping, self.kv_cache.shape[2]
+                 )
+             slot_mapping = page16_slot_mapping
++        return key_cache, value_cache, slot_mapping
++
++    def _insert_aiter_sparse_pa_kv(
++        self,
++        k: torch.Tensor,
++        v: torch.Tensor,
++        index_k: torch.Tensor | None,
++        slot_mapping: torch.Tensor,
++        index_slot_mapping: torch.Tensor | None,
++    ) -> None:
++        if self.kv_cache.numel() == 0:
++            return
++        from aiter import reshape_and_cache
++
++        from vllm.models.minimax_m3.amd.ops.sparse_pa import (
++            minimax_m3_insert_index_cache,
++        )
++
++        key_cache, value_cache, slot_mapping = (
++            self._prepare_aiter_sparse_pa_cache_insert(slot_mapping)
++        )
+         kv_cache_dtype = (
+             self.kv_cache_dtype
+             if is_quantized_kv_cache(self.kv_cache_dtype)
+@@ -919,6 +965,69 @@ class MiniMaxM3SparseAttention(nn.Module, AttentionLayerBase):
+             return
+         minimax_m3_insert_index_cache(index_k, index_cache, index_slot_mapping)
+ 
++    def _can_use_aiter_fused_qknorm_cache_insert(
++        self,
++        *,
++        insert_index: bool,
++    ) -> bool:
++        if (
++            not self.use_aiter_fused_qknorm_cache_insert
++            or self.kv_cache.numel() == 0
++            or not is_quantized_kv_cache(self.kv_cache_dtype)
++            or getattr(self, "_k_scale_float", 1.0) != 1.0
++            or getattr(self, "_v_scale_float", 1.0) != 1.0
++        ):
++            return False
++        return not insert_index or self.indexer.index_cache.kv_cache.numel() != 0
++
++    def _run_aiter_fused_qknorm_cache_insert(
++        self,
++        qkv: torch.Tensor,
++        positions: torch.Tensor,
++        q: torch.Tensor,
++        index_q: torch.Tensor | None,
++        main_slot_mapping: torch.Tensor,
++        index_slot_mapping: torch.Tensor | None,
++        *,
++        skip_index_branch: bool,
++    ) -> None:
++        from aiter import fused_qknorm_idxrqknorm
++
++        key_cache, value_cache, main_slot_mapping = (
++            self._prepare_aiter_sparse_pa_cache_insert(main_slot_mapping)
++        )
++        index_cache = (
++            None
++            if skip_index_branch
++            else self.indexer.index_cache.kv_cache
++        )
++        fused_qknorm_idxrqknorm(
++            qkv,
++            self.q_norm.weight,
++            self.k_norm.weight,
++            self.rotary_emb.cos_sin_cache,
++            positions,
++            self.num_heads,
++            self.num_kv_heads,
++            self.rotary_emb.rotary_dim,
++            self.q_norm.variance_epsilon,
++            None if skip_index_branch else self.index_q_norm.weight,
++            None if skip_index_branch else self.index_k_norm.weight,
++            self.num_idx_heads,
++            main_slot_mapping,
++            key_cache,
++            value_cache,
++            index_cache,
++            ASM_PAGE_SIZE,
++            q,
++            index_q,
++            index_slot_mapping,
++            kv_cache_dtype="fp8_e4m3_unit",
++            index_cache_dtype="fp8",
++            asm_layout=True,
++            skip_index_branch=skip_index_branch,
++        )
++
+     def forward(
+         self,
+         positions: torch.Tensor,
+@@ -926,6 +1035,41 @@ class MiniMaxM3SparseAttention(nn.Module, AttentionLayerBase):
+     ) -> torch.Tensor:
+         # Single fused projection emitting [q | k | v | index_q | index_k].
+         qkv, _ = self.qkv_proj(hidden_states)
++        attn_output = torch.empty(
++            (qkv.shape[0], self.q_size),
++            dtype=qkv.dtype,
++            device=qkv.device,
++        )
++        encoded_layer_name = _encode_layer_name(self.layer_name)
++        if current_platform.opaque_attention_op():
++            torch.ops.vllm.minimax_m3_sparse_attention_with_output(
++                qkv,
++                positions,
++                attn_output,
++                encoded_layer_name,
++            )
++        else:
++            minimax_m3_sparse_attention_with_output(
++                qkv,
++                positions,
++                attn_output,
++                encoded_layer_name,
++            )
++        output, _ = self.o_proj(attn_output)
++        return output
++
++    def _forward_sparse_attention(
++        self,
++        qkv: torch.Tensor,
++        positions: torch.Tensor,
++        output: torch.Tensor,
++    ) -> None:
++        """Run the metadata-dependent sparse attention transaction eagerly.
++
++        This method is called through an opaque custom op so torch.compile
++        cannot specialize on the memory-profiling forward context and remove
++        the runtime indexer, cache updates, or sparse attention kernels.
++        """
+ 
+         # Horizontally-fused per-head Gemma QK-norm + partial NeoX RoPE on the
+         # main (q/k) and index (index_q/index_k) branches, all read straight out
+@@ -946,13 +1090,26 @@ class MiniMaxM3SparseAttention(nn.Module, AttentionLayerBase):
+             or self.layer_name not in fwd_slot_mapping
+         ):
+             # Memory-profiling run: caches not yet bound, slot_mapping is empty.
+-            return qkv.new_zeros((num_tokens, self.hidden_size))
++            output.zero_()
++            return
+ 
+         main_slot_mapping = fwd_slot_mapping[self.layer_name]
+         q = qkv.new_empty((num_tokens, self.q_size))
+         if self.skip_index_topk:
+             index_q = None
+-            if self.use_aiter_sparse_pa:
++            if self._can_use_aiter_fused_qknorm_cache_insert(
++                insert_index=False
++            ):
++                self._run_aiter_fused_qknorm_cache_insert(
++                    qkv,
++                    positions,
++                    q,
++                    None,
++                    main_slot_mapping,
++                    None,
++                    skip_index_branch=True,
++                )
++            elif self.use_aiter_sparse_pa:
+                 ops.fused_minimax_m3_qknorm_rope_kv_insert(
+                     qkv,
+                     self.q_norm.weight,
+@@ -1010,7 +1167,19 @@ class MiniMaxM3SparseAttention(nn.Module, AttentionLayerBase):
+                 (num_tokens, self.index_q_size),
+                 dtype=self.indexer.index_cache.dtype,
+             )
+-            if self.use_aiter_sparse_pa:
++            if self._can_use_aiter_fused_qknorm_cache_insert(
++                insert_index=True
++            ):
++                self._run_aiter_fused_qknorm_cache_insert(
++                    qkv,
++                    positions,
++                    q,
++                    index_q,
++                    main_slot_mapping,
++                    index_slot_mapping,
++                    skip_index_branch=False,
++                )
++            elif self.use_aiter_sparse_pa:
+                 ops.fused_minimax_m3_qknorm_rope_kv_insert(
+                     qkv,
+                     self.q_norm.weight,
+@@ -1071,10 +1240,7 @@ class MiniMaxM3SparseAttention(nn.Module, AttentionLayerBase):
+                     self.kv_cache_dtype,
+                 )
+ 
+-        output = torch.empty_like(q)
+-        attn_output = self._run_attention(q, index_q, output)
+-        output, _ = self.o_proj(attn_output)
+-        return output
++        self._run_attention(q, index_q, output)
+ 
+     @eager_break_during_capture
+     def _run_attention(
+@@ -1153,6 +1319,28 @@ class MiniMaxM3SparseAttention(nn.Module, AttentionLayerBase):
+         return self.impl.forward(self, query, self.kv_cache, output)
+ 
+ 
++def minimax_m3_sparse_attention_with_output(
++    qkv: torch.Tensor,
++    positions: torch.Tensor,
++    output: torch.Tensor,
++    layer_name: LayerNameType,
++) -> None:
++    """Run a MiniMax-M3 sparse-attention layer outside torch.compile."""
++
++    layer_name = _resolve_layer_name(layer_name)
++    layer = get_forward_context().no_compile_layers[layer_name]
++    if not isinstance(layer, MiniMaxM3SparseAttention):
++        raise TypeError(f"{layer_name} is not a MiniMax-M3 sparse attention owner")
++    layer._forward_sparse_attention(qkv, positions, output)
++
++
++direct_register_custom_op(
++    op_name="minimax_m3_sparse_attention_with_output",
++    op_func=minimax_m3_sparse_attention_with_output,
++    mutates_args=["qkv", "output"],
++)
++
++
+ class MiniMaxM3DecoderLayer(nn.Module):
+     def __init__(
+         self,
+@@ -1246,6 +1434,14 @@ class MiniMaxM3DecoderLayer(nn.Module):
+         return hidden_states, residual
+ 
+ 
++@support_torch_compile(
++    dynamic_arg_dims={
++        "input_ids": {0: "num_tokens"},
++        "positions": {0: "num_tokens"},
++        "intermediate_tensors": {0: "num_tokens"},
++        "inputs_embeds": {0: "num_tokens"},
++    }
++)
+ class MiniMaxM3Model(nn.Module, EagleModelMixin):
+     fall_back_to_pt_during_load = False
+ 

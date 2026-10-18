@@ -1,0 +1,21 @@
+{
+  "arm": "r03_draft_metadata",
+  "base_image_id": "sha256:2695afe0011d4a5c9ab394a8252a590fe0c0ee4497d483e50606e996762952a7",
+  "independent_on_a0": true,
+  "patch_sha256": "2ef6fb0e31512cc0d17d8c75fbe6a86cdbba017a71f22f2cb52b941d945d2e20",
+  "files": {
+    "vllm/v1/attention/backends/rocm_aiter_unified_attn.py": {
+      "before_sha256": "65a14627f8134b3e4b9a03eac68e6163b71c1bc8b5c3639f54b1b8f45ff3a378",
+      "after_sha256": "9943a7f5a0b45a221b4ebee4ea8bc9a104a2987459d8e662e080477c55bdb019",
+      "bytes": 14838
+    },
+    "vllm/v1/worker/gpu/spec_decode/autoregressive/speculator.py": {
+      "before_sha256": "74ab4d19eeef958f2952a7bb736d591013acc4c177e3aba83ddb73e012e7d392",
+      "after_sha256": "887728a3a5d18c229481e4940d64ca3ca61111820e13bafead2b1048c397beb9",
+      "bytes": 36783
+    }
+  },
+  "environment": {},
+  "audit_environment": {},
+  "gpu_validation_of_packaged_version": false
+}

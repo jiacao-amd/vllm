@@ -1,0 +1,4 @@
+# Exact historical payloads and generated unified patches preserve source bytes.
+arms/**/vllm.patch -whitespace
+arms/**/payload/** -whitespace
+client/** -whitespace

@@ -1,0 +1,67 @@
+{
+  "passed": true,
+  "image_id": "sha256:35344746601e24e5d0fd7032e0270b67a10ce1e6f33d234e4c491ac436306a0b",
+  "base_image_id": "sha256:2695afe0011d4a5c9ab394a8252a590fe0c0ee4497d483e50606e996762952a7",
+  "checked_source_files": 401,
+  "unchanged_a0_source_files": 390,
+  "changed_files": [
+    {
+      "path": "vllm/models/minimax_m3/amd/indexer_aiter.py",
+      "a0_sha256": "336e89830301d8bef7335bb7ea16af0291a7ad46455029e2f366206ab424ba59",
+      "candidate_sha256": "5034a0f242657edc25aed9936a8a9d10f08df2c4925d40e3ffe54b7217f0cb23"
+    },
+    {
+      "path": "vllm/models/minimax_m3/amd/ops/sparse_pa.py",
+      "a0_sha256": "75eeb0751994058e6741877c81cb8c2192a2a4011a6b70548a06f6d3ff686f80",
+      "candidate_sha256": "734b974993a6109c9ef342a6bae730f6a5bd6135e984918f5c2b8652c0db46b3"
+    },
+    {
+      "path": "vllm/models/minimax_m3/amd/ops/sparse_pa_merge_runtime.py",
+      "a0_sha256": null,
+      "candidate_sha256": "27905aadc01bb96f3757270f3b4ebe59988262bfb6d2a386b695a083e55ea7b1"
+    },
+    {
+      "path": "vllm/models/minimax_m3/amd/ops/_pa_merge_grouped/grouped_merge.py",
+      "a0_sha256": null,
+      "candidate_sha256": "79ff0ce8a3d0559416011a578228d2fc7ed532bb73a2bd7b6dd853d5427f180b"
+    },
+    {
+      "path": "vllm/models/minimax_m3/amd/ops/_pa_merge_grouped/grouped_merge.cpp.jinja",
+      "a0_sha256": null,
+      "candidate_sha256": "a0f69fb391e967bd3ecf8f8b998bcb6d70fc79432bdff0b1f03f2c1b57288817"
+    },
+    {
+      "path": "vllm/models/minimax_m3/amd/ops/_pa_merge_grouped/pa_adapter.py",
+      "a0_sha256": null,
+      "candidate_sha256": "0e399f8db9f617de80b99e7cfa4d532b2580bff65680ceeb97fef53689d91ec3"
+    },
+    {
+      "path": "vllm/models/minimax_m3/amd/ops/_pa_merge_grouped/grouped_merge_v2.cpp.jinja",
+      "a0_sha256": null,
+      "candidate_sha256": "b51bfe0c22acc9592bd8fb73e7a761fcbafe131606082e03e4cce62212c94d8b"
+    },
+    {
+      "path": "vllm/models/minimax_m3/amd/ops/_pa_merge_grouped/__init__.py",
+      "a0_sha256": null,
+      "candidate_sha256": "fb419dce4e7313d2dae5ff6a42bccad5ca0f77175cbc5f9d74556eb64c0e242d"
+    },
+    {
+      "path": "vllm/models/minimax_m3/amd/ops/_score_grid/score_dispatch.py",
+      "a0_sha256": null,
+      "candidate_sha256": "19514721b9312182f0f9a2de1282cae3cb781809d70faa6297d0cc794ff47785"
+    },
+    {
+      "path": "vllm/models/minimax_m3/amd/ops/_score_grid/policy.py",
+      "a0_sha256": null,
+      "candidate_sha256": "060e00ae76adca89d7172d0091c50980226b5eccd551aca278773aae85ad6272"
+    },
+    {
+      "path": "vllm/models/minimax_m3/amd/ops/_score_grid/__init__.py",
+      "a0_sha256": null,
+      "candidate_sha256": "787d3e4481e4ed95411d41ea5b35f50f394be043a76212cc5f54be012d2af96a"
+    }
+  ],
+  "patch_manifest_sha256": "fde46b34ae9e39769b0c511cc975f79d459825e292ef0c5dfa79f095f6593013",
+  "plan_sha256": "2ea9f48178fe33d05f5542265d11f05a7b5c4d378fb8c18932bde503af1c3f0b",
+  "gpu_executed": false
+}

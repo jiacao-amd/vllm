@@ -1,0 +1,121 @@
+{
+  "schema_version": 1,
+  "arm": "R4",
+  "topic": "A33 combined target and draft vocabulary-sharded greedy sampling on original A0",
+  "base_image": "sha256:2695afe0011d4a5c9ab394a8252a590fe0c0ee4497d483e50606e996762952a7",
+  "base_ref": "local/mm3-vllm-2a02f6e:latest@sha256:2695afe0011d4a5c9ab394a8252a590fe0c0ee4497d483e50606e996762952a7",
+  "sampling_donor_image": "sha256:b72c277384a0cea80bf82bfc9d2d1e7563a772dc3adcf84f9da592e2a2f718e5",
+  "scope": {
+    "modified_a0_files": [
+      "vllm/models/minimax_m3/amd/model.py",
+      "vllm/v1/worker/gpu/model_runner.py",
+      "vllm/v1/worker/gpu/spec_decode/speculator.py"
+    ],
+    "new_sampling_helpers": [
+      "vllm/models/minimax_m3/amd/ops/draft_argmax.py",
+      "vllm/v1/worker/gpu/spec_decode/sharded_greedy_rejection_sampler.py",
+      "vllm/v1/worker/gpu/spec_decode/greedy_rejection_sampler.py"
+    ],
+    "excluded": [
+      "A1 target compile, opaque attention op, or attention preparation fusion",
+      "A5 draft attention metadata reuse or fused multistep capability",
+      "A19 or other router changes",
+      "MoE, GEMM1, GEMM2, TP fusion, sparse PA, score grid, or merge changes",
+      "A30 batch-sharded sampling or standalone non-sharded A31 dispatch",
+      "Changes to precision, LM heads, model computation, acceptance rates, or workload"
+    ]
+  },
+  "necessary_dependencies": [
+    {
+      "name": "Local target logits access",
+      "detail": "Add only compute_logits_local to the AMD causal model and VL wrapper. A0 LogitsProcessor already supports skip_gather=True; its projection, scaling and soft-cap implementation remain unchanged."
+    },
+    {
+      "name": "Shared greedy verification kernel",
+      "detail": "A33 sharded target sampling imports _greedy_verify_and_count and its _greedy_global_argmax dependency. Derive only these exact functions and their imports from the A33 greedy_rejection_sampler.py. Do not copy its unused full-logit stats kernel or Python entrypoint; A0 rejection_sampler.py and its fallback stay byte-identical."
+    },
+    {
+      "name": "Draft load-time validation and sampling selection",
+      "detail": "Port the A33 private flag, identity draft-to-target mapping validation, and branch in DraftModelSpeculator._greedy_sample_draft. A0 Eagle3/autoregressive callers and metadata construction already support this hook and are byte-identical to their A33 exports."
+    },
+    {
+      "name": "Existing A0 APIs",
+      "detail": "The generator verifies byte equality between A0 and A33 for 11 consumed sampling, LM-head, input-batch, draft-caller, and TP-group API files. No dependency on another ablation arm is required."
+    }
+  ],
+  "environment": {
+    "MM3_SHARDED_GREEDY_VERIFY_EXPERIMENT": "1",
+    "MM3_FUSED_DRAFT_ARGMAX_EXPERIMENT": "1"
+  },
+  "parent_build": {
+    "runner": "../build_arm.sh",
+    "arm_argument": "r04_sampling",
+    "audit": "../audit_overlay.py",
+    "payload": "payload/",
+    "owner": "parent"
+  },
+  "runtime": {
+    "interpreter": "/usr/bin/python3",
+    "required_environment": [
+      "HOME",
+      "USER",
+      "LOGNAME"
+    ],
+    "identity": "Parent-provided non-root user with explicit HOME, USER and LOGNAME on every runtime invocation"
+  },
+  "parent_preflight": [
+    "Parent builds through ../build_arm.sh r04_sampling using this arm's Dockerfile, named digest-pinned A0 base_ref and payload. Preserve all original A0 environment and runner settings except the two private sampling switches.",
+    "The shared ../audit_overlay.py audits installed payload hashes; patch_manifest.json remains provenance rather than a required common-runner schema. Also verify the 11 unchanged dependency hashes and installed module paths. Do not let bind mounts or PYTHONPATH redirect imports to dirty or cumulative sources.",
+    "Use the base image interpreter /usr/bin/python3 and explicitly supply HOME, USER and LOGNAME for every runtime invocation.",
+    "Confirm the active GPUModelRunner is vllm.v1.worker.gpu.model_runner, the AMD MiniMax-M3 VL wrapper exposes compute_logits_local, and the language model is the A0 implementation plus the two listed local-logits methods.",
+    "Require both startup messages: Vocabulary-sharded greedy verification enabled: TP4 and MiniMax-M3 fused draft argmax enabled. Require runner.sharded_greedy_verifier is not None and speculator._use_minimax_fused_draft_argmax is True; logs alone do not prove replay activation.",
+    "Confirm TP4/PP1, vocab 200064 with contiguous local width 50016, hidden dimension 6144, the original BF16 draft LM head, identity D2T, scale 1.0 and no soft cap.",
+    "Keep greedy Eagle3 draft sampling and the original synthetic rejection configuration. Eligible target requests require temperature 0, no logits processors or requested logprobs, no grammar/structured output, no draft logits, no LoRA, no batch-sharded sampling, no adaptive/block verification, no trace replay, no sampling mask, and no NaN diagnostics.",
+    "Unsupported target requests deliberately use the unchanged A0 fallback; do not treat a successful fallback-only run as an active R4 measurement."
+  ],
+  "activation_checks": {
+    "checker": "verify_activation.verify_kernel_events(events_by_rank)",
+    "input": "Map TP ranks 0,1,2,3 to Chrome traceEvents from an eligible, replay-only steady-decode window of the actual parent model run. Exclude startup, graph capture, isolated microtests and CPU-only annotations.",
+    "required_device_kernels_per_rank": {
+      "target": [
+        "_sharded_greedy_target_stats",
+        "_greedy_verify_and_count"
+      ],
+      "draft": [
+        "_local_max_pack",
+        "_merge_max"
+      ]
+    },
+    "additional_parent_checks": [
+      "Verify compact TP all-gathers replace full target and draft vocabulary gathers in eligible sampling ranges, while both original LM-head GEMMs still execute.",
+      "Verify _greedy_verify_and_count is specialized with TP_SIZE=4 and synthetic rates from the unchanged rejection sampler; no acceptance shortcut or disabled rejection path.",
+      "Confirm the normal three Eagle3 draft steps and all original target/draft model, attention, router and MoE kernels remain active. Kernel presence alone does not prove execution counts or numerical correctness.",
+      "Any missing target or draft kernel on any rank invalidates activation evidence; fix configuration or report the arm inactive before attributing performance."
+    ]
+  },
+  "validation": {
+    "cpu": "Python -B unit tests, source pins, exact patch reversibility, syntax checks, eligibility/fallback tests, activation-checker tests and ruff --no-cache. No real torch, Triton or vLLM imports in CPU tests.",
+    "parent_correctness": [
+      "Validate actual target and draft token IDs against original A0 on C4 correctness runs, checking sampled/rejected counts and synthetic acceptance behavior on all TP ranks.",
+      "Exercise ordinary greedy and unchanged synthetic rates, ties/NaNs/infinities, shard/block boundaries, identity mapping, ragged batches, invalid draft placeholders, partial prefill, and graph replay of the dynamic draft token count.",
+      "Existing A33 helper evidence may support the unchanged kernels, but does not validate the new A0 wiring or substitute for runtime activation and A0 correctness."
+    ],
+    "parent_performance": {
+      "gate": "Correctness and actual activation, not a positive microbenchmark gain",
+      "runs": 1,
+      "tp": 4,
+      "concurrency": 24,
+      "isl": 8192,
+      "osl": 1024,
+      "requests": 240,
+      "eagle3_k": 3,
+      "synthetic_acceptance": 2.78,
+      "kv_cache_dtype": "fp8",
+      "kv_block_size": 128,
+      "baseline": "../../vllm_c24_baseline/vllm_c24_8k1k.json",
+      "baseline_output_tok_s": 2310.4520822142695,
+      "rules": "Reuse saved original A0. Run every correctness-valid independent arm once, including flat/negative arms; no cumulative comparison, baseline retiming, selective retest, C4 performance, or AgenticX performance."
+    },
+    "status": "CPU implementation only; no Docker build, GPU execution, correctness or performance claim"
+  }
+}

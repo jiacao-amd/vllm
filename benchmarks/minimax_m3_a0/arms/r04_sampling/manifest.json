@@ -1,0 +1,44 @@
+{
+  "arm": "r04_sampling",
+  "base_image_id": "sha256:2695afe0011d4a5c9ab394a8252a590fe0c0ee4497d483e50606e996762952a7",
+  "independent_on_a0": true,
+  "patch_sha256": "34e0de60b4dcf7e66d0fcacb1ca898a920a3d8814a3734250d882bbf609d2c7b",
+  "files": {
+    "vllm/models/minimax_m3/amd/model.py": {
+      "before_sha256": "14d15efaad32c174700569898d9ee778c72bad9194a1253dba0703c09da6e1ca",
+      "after_sha256": "146f4e76a4de9fb338ed582c2af1c60d1ffe43e1028d1d04712e74e78c2f74e0",
+      "bytes": 75561
+    },
+    "vllm/models/minimax_m3/amd/ops/draft_argmax.py": {
+      "before_sha256": null,
+      "after_sha256": "fa149828276374309f2d0eec338db7b8a11fe3d24ad4011e4aee7060adf36d9b",
+      "bytes": 4421
+    },
+    "vllm/v1/worker/gpu/model_runner.py": {
+      "before_sha256": "3ad4addad3205419a095e94ad345d9379112eda320ee9dec336f2b7b16ccae49",
+      "after_sha256": "ac19e8111add6eff7ebc2c2461a0af8feaf817011650eac986bb5d3f0318b8b4",
+      "bytes": 98525
+    },
+    "vllm/v1/worker/gpu/spec_decode/greedy_rejection_sampler.py": {
+      "before_sha256": null,
+      "after_sha256": "c3a3a4980de75a687d20a8d8ea82908b6756be54a94c24944dbb8e5462618dc5",
+      "bytes": 4713
+    },
+    "vllm/v1/worker/gpu/spec_decode/sharded_greedy_rejection_sampler.py": {
+      "before_sha256": null,
+      "after_sha256": "b92fadf403ca5329bc26bd777b8434350a1c6e6b4a8b536173c27b34eab5f8c8",
+      "bytes": 9989
+    },
+    "vllm/v1/worker/gpu/spec_decode/speculator.py": {
+      "before_sha256": "6443d873f066c4f78b090d5afacea4a675b0b3757a4b1f4e9573cda3cc11f480",
+      "after_sha256": "c7a4d7941215e2eafc12e4090bc7c073fbe996188c929c90ddd3ac0637dedbc8",
+      "bytes": 19754
+    }
+  },
+  "environment": {
+    "MM3_SHARDED_GREEDY_VERIFY_EXPERIMENT": "1",
+    "MM3_FUSED_DRAFT_ARGMAX_EXPERIMENT": "1"
+  },
+  "audit_environment": {},
+  "gpu_validation_of_packaged_version": false
+}

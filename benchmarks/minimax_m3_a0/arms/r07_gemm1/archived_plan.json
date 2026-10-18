@@ -1,0 +1,67 @@
+{
+  "a0_layout_audit": {
+    "actual_target_backend": "CK-Tile Stage1 split_k>=2 and CK-Tile Stage2",
+    "final_sort_BM": 16,
+    "intermediate": "[96,5,768] BF16 token/slot order, standard activation layout",
+    "logged_BM32": "Preliminary heuristic, not final MOEMetadata.block_m"
+  },
+  "arm": "R7",
+  "base_image": "sha256:2695afe0011d4a5c9ab394a8252a590fe0c0ee4497d483e50606e996762952a7",
+  "baseline": "../vllm_c24_baseline/vllm_c24_8k1k.json",
+  "baseline_retimed": false,
+  "checks": [
+    "Fresh same-weight/route comparison against A0 G1+G2; prior A48 evidence does not validate the new slot writer.",
+    "All 480 token/slot rows, shared expert, poisoned outputs, slot boundaries and padding; BF16 output and TP semantics unchanged.",
+    "Exactly one R7 G1 per target MoE call, unchanged CK-Tile G2 and native TP AR; non-M96 delegates unchanged.",
+    "Parent actual TP4 dispatch audit and C24/C4 correctness before one independent fixed E2E against saved A0.",
+    "No micro speed filter: every correctness-valid ablation receives its requested single E2E."
+  ],
+  "env": {},
+  "forbidden_dispatch": [
+    "mm3_a37_atomic",
+    "mm3_a68",
+    "mm3_a66"
+  ],
+  "gpu_validated": false,
+  "independent_of": [
+    "R1",
+    "R2",
+    "R3",
+    "R4",
+    "R5",
+    "R6",
+    "R8"
+  ],
+  "kernel_names": [
+    "r07_gemm1_slot_a16w4_h6144_i768_ne129_bm16_tn64_swiglu_xcd1_w2_kw2"
+  ],
+  "necessary_compatibility": [
+    "Private A48 G1 copy includes only its SwiGLU admission/runtime-parameter delta from A0.",
+    "Exact private A48 act.py supplies the missing SwiGLU device implementation; G1 imports it relatively. Global A0 act.py is untouched.",
+    "G1 output index uses packed token/slot instead of sorted row; output bound is 96*5*768 BF16.",
+    "Model-scoped CK-Tile Stage1 hook consumes the existing A0 sorting metadata and output allocation."
+  ],
+  "required_installed_dependency": {
+    "aiter/ops/flydsl/kernels/act.py": "0602318cdc3ee64fcef18ad79d731848f26f479c7a2badb65046e7727e10ddee",
+    "note": "Both byte-pinned supplemental exports are audited; only the private A48 helper is in the overlay.",
+    "vllm/models/minimax_m3/amd/ops/_r07_g1/act.py": "1632853f42132b68e082c5dea073bd6afaf2d00b9b87ec32952a0d75ca2a96bd"
+  },
+  "selection": {
+    "BM": 16,
+    "TK": 128,
+    "TN": 64,
+    "k_wave": 2,
+    "tokens": 96,
+    "waves_per_eu": 2
+  },
+  "topic": "Final A48 TN64 G1 only, with slot-layout output for unchanged A0 CK-Tile G2",
+  "unchanged": [
+    "A0 sorting/BM16",
+    "A0 CK-Tile G2",
+    "A0 TP all-reduce",
+    "router",
+    "attention",
+    "sampling",
+    "compilation settings"
+  ]
+}

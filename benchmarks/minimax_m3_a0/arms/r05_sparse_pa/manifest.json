@@ -1,0 +1,28 @@
+{
+  "arm": "r05_sparse_pa",
+  "base_image_id": "sha256:2695afe0011d4a5c9ab394a8252a590fe0c0ee4497d483e50606e996762952a7",
+  "independent_on_a0": true,
+  "patch_sha256": "39db727545a1071e75fbcb58b0ed47fbc9e297abcbb4eda0a1a3f3fb77a1b714",
+  "files": {
+    "vllm/models/minimax_m3/amd/ops/sparse_pa.py": {
+      "before_sha256": "75eeb0751994058e6741877c81cb8c2192a2a4011a6b70548a06f6d3ff686f80",
+      "after_sha256": "86f4c01de49b15884c8c8819299b6f984f5a119c06319c326f9cbd6557b4405a",
+      "bytes": 21525
+    },
+    "vllm/models/minimax_m3/amd/ops/sparse_pa_partition.py": {
+      "before_sha256": null,
+      "after_sha256": "2338c335a4e111acb7b7ab1a672ae44a1d1020a395842cb6efc1fa1c82d0dc16",
+      "bytes": 2796
+    },
+    "vllm/models/minimax_m3/amd/ops/sparse_pa_partition_runtime.py": {
+      "before_sha256": null,
+      "after_sha256": "bf8d658a09327bd42d123c8ffa3c183c6bf5d3f2cca7d939e7e98b7c016a8248",
+      "bytes": 1595
+    }
+  },
+  "environment": {
+    "MM3_SPARSE_PA_PARTITION_EXPERIMENT": "1"
+  },
+  "audit_environment": {},
+  "gpu_validation_of_packaged_version": false
+}

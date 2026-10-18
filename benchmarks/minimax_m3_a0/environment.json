@@ -1,0 +1,60 @@
+{
+  "observation_date_utc": "2026-10-18",
+  "host": {
+    "gpu": "8x AMD Instinct MI355X",
+    "architecture": "gfx950",
+    "observed_gpu_memory_gib": 287.98,
+    "recent_suite_HIP_VISIBLE_DEVICES": "4,5,6,7",
+    "historical_a0_HIP_VISIBLE_DEVICES": "0,1,2,3",
+    "historical_a0_ROCR_VISIBLE_DEVICES": "0,1,2,3",
+    "cpu": "2x AMD EPYC 9575F 64-Core Processor",
+    "logical_cpus": 256,
+    "kernel": "6.8.0-90-generic",
+    "amdgpu_driver": "6.16.13",
+    "historical_user_uid_gid": "13807:13807",
+    "historical_device_group": 110,
+    "port": 6101
+  },
+  "container": {
+    "tag": "local/mm3-vllm-2a02f6e:latest",
+    "image_id": "sha256:2695afe0011d4a5c9ab394a8252a590fe0c0ee4497d483e50606e996762952a7",
+    "created_utc": "2026-10-15T19:30:40.840341759Z",
+    "uncompressed_size_bytes": 11464781693,
+    "os": "Ubuntu 22.04",
+    "architecture": "amd64",
+    "python": "3.12.13",
+    "vllm": "0.28.1rc1.dev628+g2a02f6efe.rocm723",
+    "torch": "2.12.0+git6bbd260",
+    "torch_hip": "7.2.53211",
+    "torch_cxx11_abi": true,
+    "rocm": "7.2.3",
+    "rocm_libraries": "7.2.3-90",
+    "triton": "3.7.1+gitf0b55c07",
+    "amd_aiter": "0.1.21.post2",
+    "flydsl": "0.3.2",
+    "transformers": "5.20.0",
+    "numpy": "2.3.5",
+    "aiohttp": "3.14.5",
+    "site_packages": "/usr/local/lib/python3.12/dist-packages",
+    "original_python": "/usr/bin/python3",
+    "handoff_python": "/opt/mm3/.venv/bin/python",
+    "software_capture_initialized_gpu": false
+  },
+  "wheel_sha256": {
+    "torch": "4a76c8624975897e4b5cef8d40fbe0ee66321074bf36e2247c3ecf496508ac3f",
+    "triton": "0021cd3cc0f1abe479c28f5d2b03e324f7b09f67613c5fe17343be52201427a1",
+    "amd_aiter": "2e582e26a7419f124f54ebc7547c26f92ba44bf6f24b21cea8784f28281b3f50"
+  },
+  "inherited_image_environment": {
+    "AITER_ROCM_ARCH": "gfx942;gfx950",
+    "HSA_NO_SCRATCH_RECLAIM": "1",
+    "HSA_ENABLE_IPC_MODE_LEGACY": "1",
+    "HIP_FORCE_DEV_KERNARG": "1"
+  },
+  "destination_requirements": [
+    "Use one exclusively allocated MI355X TP4 GPU group for A0 and all eight arms.",
+    "Choose the destination GPU indices and local render/video group; do not hardcode source-host UUIDs or UID/GID.",
+    "Do not replace the base image with latest. A version label alone is insufficient for AITER/FlyDSL compatibility.",
+    "Transfer model snapshots and the Docker image separately; the Git bundle contains no model weights or full runtime image."
+  ]
+}

@@ -1,0 +1,138 @@
+diff --git a/vllm/models/minimax_m3/amd/ops/sparse_pa.py b/vllm/models/minimax_m3/amd/ops/sparse_pa.py
+index 6d0ea00..67d0963 100644
+--- a/vllm/models/minimax_m3/amd/ops/sparse_pa.py
++++ b/vllm/models/minimax_m3/amd/ops/sparse_pa.py
+@@ -560,6 +560,15 @@ def _run_gluon_decode(
+     num_seqs = total_q * num_kv_heads
+     max_context_partition_num = get_recommended_splits(num_seqs, 1)
+     context_partition_size = 256
++    from .sparse_pa_partition_runtime import select_decode
++
++    selected_decode = select_decode(
++        q, k_cache, v_cache, sparse_bt, num_kv_heads,
++        max_context_partition_num, k_scale, v_scale,
++    )
++    if selected_decode is not None:
++        pa_decode_gluon = selected_decode
++
+     intermediate_shape = (num_seqs, 1, max_context_partition_num, group_size)
+     exp_sums = torch.empty(intermediate_shape, dtype=torch.float32, device=q.device)
+     max_logits = torch.empty_like(exp_sums)
+diff --git b/vllm/models/minimax_m3/amd/ops/sparse_pa_partition.py b/vllm/models/minimax_m3/amd/ops/sparse_pa_partition.py
+new file mode 100644
+index 0000000..0a70233
+--- /dev/null
++++ b/vllm/models/minimax_m3/amd/ops/sparse_pa_partition.py
+@@ -0,0 +1,61 @@
++# SPDX-License-Identifier: Apache-2.0
++"""A38's selected partition hunk only, applied privately to the pinned A0 PA."""
++
++import hashlib
++import linecache
++from functools import cache
++from pathlib import Path
++import sys
++from types import ModuleType
++
++EXPECTED_CORE_SHA256 = "cff95e80610211a87a0849c3ed666056cb6118ec73b10bbb0840a59ee2818743"
++NATIVE_KERNEL = "paged_attention_decode_sliding_window_head_1"
++KERNEL = "mm3_a38_paged_attention_head1_hybrid"
++OLD_PARTITION = (
++    "        page_size = gl.cdiv(\n"
++    "            context_length, gl.num_programs(2) // CONTEXT_PARTITION_SIZE_PER_BLOCK\n"
++    "        )\n"
++)
++NEW_PARTITION = (
++    "        original_page_size = gl.cdiv(\n"
++    "            context_length, gl.num_programs(2) // CONTEXT_PARTITION_SIZE_PER_BLOCK\n"
++    "        )\n"
++    "        optimized_page_size = gl.cdiv(\n"
++    "            gl.cdiv(context_length, CONTEXT_PARTITION_SIZE), 4\n"
++    "        ) * CONTEXT_PARTITION_SIZE\n"
++    "        use_aligned = ((context_length >= 1921) & (context_length <= 2048)\n"
++    "            & (gl.num_programs(0) == 96) & (gl.num_programs(2) == 6))\n"
++    "        page_size = gl.where(use_aligned, optimized_page_size, original_page_size)\n"
++)
++
++
++def patched_source(source: str) -> str:
++    """Change only head-1 partition boundaries and its two kernel-name references."""
++    start = source.index(f"def {NATIVE_KERNEL}(")
++    end = source.index("\ndef paged_attention_decode_sliding_window(", start)
++    section = source[start:end]
++    if section.count(OLD_PARTITION) != 1 or source.count(NATIVE_KERNEL) != 2:
++        raise ValueError("Native A0 head-1 partition/dispatch source changed")
++    result = source[:start] + section.replace(OLD_PARTITION, NEW_PARTITION) + source[end:]
++    return result.replace(NATIVE_KERNEL, KERNEL)
++
++
++@cache
++def load(*, hybrid: bool = True):
++    """Retain all native functions, globals, imports and license headers in memory."""
++    if hybrid is not True:
++        raise ValueError("R5 includes only the selected A38 hybrid partition rule")
++    import aiter.ops.triton.gluon.pa_decode_gluon as original
++
++    source = Path(original.__file__).read_text()
++    if hashlib.sha256(source.encode()).hexdigest() != EXPECTED_CORE_SHA256:
++        raise ValueError("Installed A0 PA differs from the required native source")
++    source = patched_source(source)
++    filename = "/tmp/mm3_r05_private_pa_hybrid.py"
++    linecache.cache[filename] = (len(source), None, source.splitlines(True), filename)
++    module = ModuleType("_mm3_r05_private_pa_hybrid")
++    module.__file__, module.__package__ = filename, original.__package__
++    sys.modules[module.__name__] = module
++    exec(compile(source, filename, "exec"), module.__dict__)
++    module.a38_source_sha256 = hashlib.sha256(source.encode()).hexdigest()
++    return module
+diff --git b/vllm/models/minimax_m3/amd/ops/sparse_pa_partition_runtime.py b/vllm/models/minimax_m3/amd/ops/sparse_pa_partition_runtime.py
+new file mode 100644
+index 0000000..d71cf6b
+--- /dev/null
++++ b/vllm/models/minimax_m3/amd/ops/sparse_pa_partition_runtime.py
+@@ -0,0 +1,45 @@
++# SPDX-License-Identifier: Apache-2.0
++"""Private, shape-guarded MiniMax-M3 sparse PA partition experiment."""
++
++import os
++
++import torch
++
++
++def eligible(query, key, value, table, kv_heads, splits, key_scale, value_scale):
++    """Only the measured TP4/M96/page16/scalar-FP8 contract may use the kernel."""
++    return (
++        tuple(query.shape) == (96, 16, 128)
++        and query.dtype == torch.bfloat16
++        and kv_heads == 1
++        and splits == 6
++        and tuple(table.shape) == (96, 128)
++        and table.dtype == torch.int32
++        and key.dtype == value.dtype == torch.float8_e4m3fn
++        and key.ndim == value.ndim == 5
++        and tuple(key.shape[1:]) == (1, 8, 16, 16)
++        and tuple(value.shape[1:]) == (1, 1, 128, 16)
++        and key.device == value.device == query.device == table.device
++        and all(
++            scale is not None
++            and scale.numel() == 1
++            and scale.dtype == torch.float32
++            and scale.device == query.device
++            for scale in (key_scale, value_scale)
++        )
++    )
++
++
++def select_decode(query, key, value, table, kv_heads, splits, key_scale, value_scale):
++    """The opaque attention operation keeps the same output/metadata contract."""
++    if os.getenv("MM3_SPARSE_PA_PARTITION_EXPERIMENT", "0") != "1":
++        return None
++    if not eligible(query, key, value, table, kv_heads, splits, key_scale, value_scale):
++        return None
++    from vllm.platforms.rocm import on_gfx950
++
++    if not on_gfx950():
++        return None
++    from .sparse_pa_partition import load
++
++    return load(hybrid=True).pa_decode_gluon

@@ -1,0 +1,78 @@
+// SPDX-License-Identifier: MIT
+// Copyright (C) 2026, Advanced Micro Devices, Inc. All rights reserved.
+// Native PA arithmetic, wave-uniform weight reads and explicit packed FP32 FMA.
+#include "pa_ps.cuh"
+
+namespace {
+constexpr int HEADS = 16;
+constexpr int DIM = 128;
+constexpr int PARTS = 6;
+constexpr int GROUP = {{heads_per_block}};
+static_assert(GROUP == 2 || GROUP == 4 || GROUP == 8);
+using Float2 = float __attribute__((ext_vector_type(2)));
+
+__global__ __launch_bounds__(GROUP * 64) void mm3_grouped_pa_merge_g{{heads_per_block}}(
+    __hip_bfloat16* __restrict__ output,
+    const float* __restrict__ sums,
+    const float* __restrict__ maxima,
+    const __hip_bfloat16* __restrict__ partials) {
+  const int sequence = blockIdx.x;
+  const int head = blockIdx.y * GROUP + threadIdx.x / 64;
+  const int lane = threadIdx.x % 64;
+  const auto es = aiter::pa_ps_make_buffer_rsrc(sums);
+  const auto ml = aiter::pa_ps_make_buffer_rsrc(maxima);
+  const auto in = aiter::pa_ps_make_buffer_rsrc(partials);
+  const auto out = aiter::pa_ps_make_buffer_rsrc(output);
+  float part_sum = 0.0f;
+  float part_max = -INFINITY;
+  if (lane < PARTS) {
+    const int offset = ((sequence * PARTS + lane) * HEADS + head) * 4;
+    part_sum = aiter::pa_ps_buffer_load<float>(es, offset);
+    part_max = aiter::pa_ps_buffer_load<float>(ml, offset);
+  }
+  const float global_max = aiter::pa_ps_wave_reduce_max<8>(part_max);
+  const bool has_finite_global_max = global_max > -FLT_MAX;
+  const float safe_global_max = has_finite_global_max ? global_max : 0.0f;
+  const bool valid_part = lane < PARTS && part_max > -FLT_MAX;
+  const float part_scale = valid_part
+      ? exp2f((part_max - safe_global_max) * aiter::kPaPsReduceLog2E) : 0.0f;
+  const float scaled_sum = part_sum * part_scale;
+  const float global_sum = aiter::pa_ps_wave_reduce_sum<8>(scaled_sum);
+  const float safe_sum = global_sum > 0.0f ? global_sum : 1.0f;
+  const float weight_local = scaled_sum / safe_sum;
+
+  Float2 acc = {0.0f, 0.0f};
+#pragma unroll
+  for (int part = 0; part < PARTS; ++part) {
+    // Each wave has one head; this lane selector is uniform within that wave.
+    const int weight_bits = __builtin_amdgcn_readlane(
+        __builtin_bit_cast(int, weight_local), part);
+    const float weight = __builtin_bit_cast(float, weight_bits);
+    const int offset = (((sequence * PARTS + part) * HEADS + head) * DIM + 2 * lane) * 2;
+    const uint32_t pair = __builtin_amdgcn_raw_buffer_load_b32(in, offset, 0, 0);
+    const auto value0 = __builtin_bit_cast(__hip_bfloat16, static_cast<uint16_t>(pair));
+    const auto value1 = __builtin_bit_cast(__hip_bfloat16, static_cast<uint16_t>(pair >> 16));
+    const Float2 values = {aiter::pa_ps_to_float(value0), aiter::pa_ps_to_float(value1)};
+    const Float2 weights = {weight, weight};
+    acc = __builtin_elementwise_fma(values, weights, acc);
+  }
+  // Same native RNE conversion, with both useful components in one instruction.
+  uint32_t pair;
+  asm("v_cvt_pk_bf16_f32 %0, %1, %2" : "=v"(pair) : "v"(acc[0]), "v"(acc[1]));
+  const int offset = ((sequence * HEADS + head) * DIM + 2 * lane) * 2;
+  __builtin_amdgcn_raw_buffer_store_b32(pair, out, offset, 0, 0);
+}
+}
+
+extern "C" int {{func_name}}(
+    void* output, void* sums, void* maxima, void* partials,
+    int sequences, void* stream) {
+  hipLaunchKernelGGL(
+      mm3_grouped_pa_merge_g{{heads_per_block}}, dim3(sequences, HEADS / GROUP), dim3(GROUP * 64),
+      0, reinterpret_cast<hipStream_t>(stream),
+      reinterpret_cast<__hip_bfloat16*>(output),
+      reinterpret_cast<const float*>(sums),
+      reinterpret_cast<const float*>(maxima),
+      reinterpret_cast<const __hip_bfloat16*>(partials));
+  return static_cast<int>(hipGetLastError());
+}

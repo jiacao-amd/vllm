@@ -1,0 +1,27 @@
+{
+  "passed": true,
+  "image_id": "sha256:2483782bad3ff09b136e75623170ba8530e13f350e7f3be7284cc7d329a2a798",
+  "base_image_id": "sha256:2695afe0011d4a5c9ab394a8252a590fe0c0ee4497d483e50606e996762952a7",
+  "checked_source_files": 392,
+  "unchanged_a0_source_files": 389,
+  "changed_files": [
+    {
+      "path": "vllm/_custom_ops.py",
+      "a0_sha256": "04fed88fc45b5d314059be44e9b95a79f1c7ff2a5018004f805fe4a58672be71",
+      "candidate_sha256": "49af823c770b73f9e277d47e05bce86429f6b91d3c3e89fd5604dde79524cd28"
+    },
+    {
+      "path": "vllm/config/compilation.py",
+      "a0_sha256": "bae1a13054cfe318f62d0408161e90947e6aa7df325d6c08f89435fe3e149165",
+      "candidate_sha256": "e2f5da0fa634e50f47555d911de3fbed0b67e33fd94e42cbffd2923acfaa0eaa"
+    },
+    {
+      "path": "vllm/models/minimax_m3/amd/model.py",
+      "a0_sha256": "14d15efaad32c174700569898d9ee778c72bad9194a1253dba0703c09da6e1ca",
+      "candidate_sha256": "61b14eeab78f7877df2e411c6f80d47d8fddc160d4b20ff87b0c682f77112c4a"
+    }
+  ],
+  "patch_manifest_sha256": "41ac6821399ae793bcea64f08c94628a62bf6877f972dbc683ac59ce67d5ee03",
+  "plan_sha256": "a948e3e317b97b5162385284d56f2f382d2cf35e54983d560d4402c9c88dae60",
+  "gpu_executed": false
+}

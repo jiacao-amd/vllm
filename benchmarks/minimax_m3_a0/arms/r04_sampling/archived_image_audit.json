@@ -1,0 +1,42 @@
+{
+  "passed": true,
+  "image_id": "sha256:00f14ffeddf509b94ef3ef486825182c8eb916e87e5b68aaff0f7c81278c6836",
+  "base_image_id": "sha256:2695afe0011d4a5c9ab394a8252a590fe0c0ee4497d483e50606e996762952a7",
+  "checked_source_files": 395,
+  "unchanged_a0_source_files": 389,
+  "changed_files": [
+    {
+      "path": "vllm/v1/worker/gpu/model_runner.py",
+      "a0_sha256": "3ad4addad3205419a095e94ad345d9379112eda320ee9dec336f2b7b16ccae49",
+      "candidate_sha256": "ac19e8111add6eff7ebc2c2461a0af8feaf817011650eac986bb5d3f0318b8b4"
+    },
+    {
+      "path": "vllm/v1/worker/gpu/spec_decode/speculator.py",
+      "a0_sha256": "6443d873f066c4f78b090d5afacea4a675b0b3757a4b1f4e9573cda3cc11f480",
+      "candidate_sha256": "c7a4d7941215e2eafc12e4090bc7c073fbe996188c929c90ddd3ac0637dedbc8"
+    },
+    {
+      "path": "vllm/v1/worker/gpu/spec_decode/sharded_greedy_rejection_sampler.py",
+      "a0_sha256": null,
+      "candidate_sha256": "b92fadf403ca5329bc26bd777b8434350a1c6e6b4a8b536173c27b34eab5f8c8"
+    },
+    {
+      "path": "vllm/v1/worker/gpu/spec_decode/greedy_rejection_sampler.py",
+      "a0_sha256": null,
+      "candidate_sha256": "c3a3a4980de75a687d20a8d8ea82908b6756be54a94c24944dbb8e5462618dc5"
+    },
+    {
+      "path": "vllm/models/minimax_m3/amd/model.py",
+      "a0_sha256": "14d15efaad32c174700569898d9ee778c72bad9194a1253dba0703c09da6e1ca",
+      "candidate_sha256": "146f4e76a4de9fb338ed582c2af1c60d1ffe43e1028d1d04712e74e78c2f74e0"
+    },
+    {
+      "path": "vllm/models/minimax_m3/amd/ops/draft_argmax.py",
+      "a0_sha256": null,
+      "candidate_sha256": "fa149828276374309f2d0eec338db7b8a11fe3d24ad4011e4aee7060adf36d9b"
+    }
+  ],
+  "patch_manifest_sha256": "b8f6aedc7b1f9522a14687c1f259e151ec4280ab154eece053fc86597296a8c2",
+  "plan_sha256": "4262b9e80084fa6f4338258a0d2b111828e4c8852a028790186ebfa2869e8991",
+  "gpu_executed": false
+}

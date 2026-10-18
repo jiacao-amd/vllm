@@ -1,0 +1,22 @@
+{
+  "arm": "r02_router",
+  "base_image_id": "sha256:2695afe0011d4a5c9ab394a8252a590fe0c0ee4497d483e50606e996762952a7",
+  "source_image_id": "sha256:0f6ab569e8965ca1851a3cd3caf68861265cb0162d6dd823959077d9340a27f1",
+  "source_snapshot": "a4",
+  "description": "A0 plus A4 BF16-input FP32 router GEMM/dispatch only",
+  "files": [
+    {
+      "path": "vllm/model_executor/layers/fused_moe/router/gate_linear.py",
+      "before_sha256": "faa43362c2e7c568498a923c682ca18cae75e87f48d00882770821cb19c21198",
+      "after_sha256": "ff51bc55d37bcbca8c94e53e4dd84766be0337c009839b2a301d46d1a1838a43",
+      "purpose": "selected historical implementation"
+    },
+    {
+      "path": "vllm/model_executor/layers/fused_moe/router/rocm_fp32_router_gemm.py",
+      "before_sha256": "9c331ef3d0bb2fb6954387d77ac62a99c5c76d2753c7438bfbb5115f68aae5ac",
+      "after_sha256": "66e587670feb71608de94a7f25dcb1ea34b1a830fcc5c140e134cb71e31d4fc5",
+      "purpose": "selected historical implementation"
+    }
+  ],
+  "other_topics_included": false
+}

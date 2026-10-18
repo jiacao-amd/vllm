@@ -1,0 +1,22 @@
+{
+  "passed": true,
+  "image_id": "sha256:9960c46ca244ffcf35996f09c7a614fc6668c8750856d30ebd94225c6b082f0a",
+  "base_image_id": "sha256:2695afe0011d4a5c9ab394a8252a590fe0c0ee4497d483e50606e996762952a7",
+  "checked_source_files": 392,
+  "unchanged_a0_source_files": 390,
+  "changed_files": [
+    {
+      "path": "vllm/v1/worker/gpu/spec_decode/autoregressive/speculator.py",
+      "a0_sha256": "74ab4d19eeef958f2952a7bb736d591013acc4c177e3aba83ddb73e012e7d392",
+      "candidate_sha256": "887728a3a5d18c229481e4940d64ca3ca61111820e13bafead2b1048c397beb9"
+    },
+    {
+      "path": "vllm/v1/attention/backends/rocm_aiter_unified_attn.py",
+      "a0_sha256": "65a14627f8134b3e4b9a03eac68e6163b71c1bc8b5c3639f54b1b8f45ff3a378",
+      "candidate_sha256": "9943a7f5a0b45a221b4ebee4ea8bc9a104a2987459d8e662e080477c55bdb019"
+    }
+  ],
+  "patch_manifest_sha256": "98f84179399ad14724cafe37946ecf8f5e96b6d3ff323df7c4e5e089dd549e0a",
+  "plan_sha256": "c58538a759a446922474db03bda98789303b08306a5e491639bda3482bac0c8e",
+  "gpu_executed": false
+}

@@ -1,0 +1,43 @@
+diff --git a/vllm/v1/attention/backends/rocm_aiter_unified_attn.py b/vllm/v1/attention/backends/rocm_aiter_unified_attn.py
+index cbd33e7..c322f89 100644
+--- a/vllm/v1/attention/backends/rocm_aiter_unified_attn.py
++++ b/vllm/v1/attention/backends/rocm_aiter_unified_attn.py
+@@ -33,6 +33,12 @@ logger = init_logger(__name__)
+ 
+ 
+ class RocmAiterUnifiedAttentionMetadataBuilder(RocmAttentionMetadataBuilder):
++    # Draft decode metadata directly references the speculator's persistent
++    # query_start_loc, seq_lens, block-table, and slot-mapping buffers. The
++    # fused draft loop updates those tensors in place between steps, and this
++    # backend has no derived scheduler metadata to refresh.
++    supports_draft_decode_metadata_update = True
++
+     def build_for_cudagraph_capture(
+         self, common_attn_metadata: CommonAttentionMetadata
+     ) -> RocmAttentionMetadata:
+@@ -42,6 +48,12 @@ class RocmAiterUnifiedAttentionMetadataBuilder(RocmAttentionMetadataBuilder):
+         attn_metadata.seq_lens.fill_(1)
+         return attn_metadata
+ 
++    def update_draft_decode_metadata(
++        self,
++        _metadata: RocmAttentionMetadata,
++    ) -> None:
++        pass
++
+ 
+ class RocmAiterUnifiedAttentionBackend(RocmAttentionBackend):
+     supported_dtypes: ClassVar[list[torch.dtype]] = [torch.float16, torch.bfloat16]
+diff --git a/vllm/v1/worker/gpu/spec_decode/autoregressive/speculator.py b/vllm/v1/worker/gpu/spec_decode/autoregressive/speculator.py
+index bba4e2b..db6f8ca 100644
+--- a/vllm/v1/worker/gpu/spec_decode/autoregressive/speculator.py
++++ b/vllm/v1/worker/gpu/spec_decode/autoregressive/speculator.py
+@@ -116,6 +116,8 @@ class AutoRegressiveSpeculator(DraftModelSpeculator):
+             }
+         )
+         self.use_fused_multi_step_decode = not unsupported_backends
++        if self.use_fused_multi_step_decode:
++            logger.info_once("MM3_ABLATION_R03_FUSED_DRAFT_ENABLED steps=%d", self.num_speculative_steps)
+         if unsupported_backends:
+             logger.info_once(
+                 "Fused multi-step draft decode is not supported by attention "

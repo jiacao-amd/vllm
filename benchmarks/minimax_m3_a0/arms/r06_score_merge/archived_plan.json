@@ -1,0 +1,123 @@
+{
+  "arm": "R6",
+  "topic": "A39 V2 grouped packed PA merge plus A41 cap432 score grid, independently on A0",
+  "base_image_id": "sha256:2695afe0011d4a5c9ab394a8252a590fe0c0ee4497d483e50606e996762952a7",
+  "dependencies": {
+    "other_ablation_arms": [],
+    "a38": "Only the host metadata eligibility predicate is reused. No partition module or A38 kernel is installed or called.",
+    "merge_wiring": "Clone the installed A0 pa_decode_gluon function code/defaults/closure; substitute only _paged_attention_decode_v2_reduce_kernel_wrapper in its copied globals. Unsupported reductions call the captured original native reducer.",
+    "score_wiring": "Replace only the decode-score binding inside original A0 indexer_aiter.forward. Reuse unchanged A41 package/policy/score_dispatch; prefill score, top-k, page emission and projection remain native A0.",
+    "compiler": "Unchanged AITER compile_template_op and pa_ps.cuh helpers, including native denormal policy.",
+    "cache_isolation": "Distinct cache directories, no cumulative envs.py or A1 compile/fused-preparation changes."
+  },
+  "native_source_pins": {
+    "aiter/ops/triton/gluon/pa_decode_gluon.py": "cff95e80610211a87a0849c3ed666056cb6118ec73b10bbb0840a59ee2818743",
+    "aiter/ops/msa_block_select.py": "34a11711c49a0724df833c447a08e3529dc64a37373d9ade8927c1fe41431dfa",
+    "aiter_meta/csrc/cpp_itfs/pa/pa_ps.cuh": "d26d66a0a65e8b82054d7b5d9aa0084766dd1a36df33792b0e98786d66efdbfe"
+  },
+  "changed_files": [
+    "vllm/models/minimax_m3/amd/ops/sparse_pa.py",
+    "vllm/models/minimax_m3/amd/indexer_aiter.py",
+    "vllm/models/minimax_m3/amd/ops/sparse_pa_merge_runtime.py",
+    "vllm/models/minimax_m3/amd/ops/_pa_merge_grouped/__init__.py",
+    "vllm/models/minimax_m3/amd/ops/_pa_merge_grouped/pa_adapter.py",
+    "vllm/models/minimax_m3/amd/ops/_pa_merge_grouped/grouped_merge.py",
+    "vllm/models/minimax_m3/amd/ops/_pa_merge_grouped/grouped_merge.cpp.jinja",
+    "vllm/models/minimax_m3/amd/ops/_pa_merge_grouped/grouped_merge_v2.cpp.jinja",
+    "vllm/models/minimax_m3/amd/ops/_score_grid/__init__.py",
+    "vllm/models/minimax_m3/amd/ops/_score_grid/policy.py",
+    "vllm/models/minimax_m3/amd/ops/_score_grid/score_dispatch.py"
+  ],
+  "environment": {
+    "MM3_GROUPED_PA_MERGE_EXPERIMENT": "1",
+    "MM3_A39_MERGE_VARIANT": "v2",
+    "MM3_INDEXER_SCORE_GRID_EXPERIMENT": "1",
+    "VLLM_CACHE_ROOT": "/tmp/mm3-r06-vllm-cache",
+    "TRITON_CACHE_DIR": "/tmp/mm3-r06-triton-cache"
+  },
+  "audit_environment": {
+    "MM3_A41_LAUNCH_AUDIT": "1"
+  },
+  "forbidden_environment": [
+    "MM3_SPARSE_PA_PARTITION_EXPERIMENT=1",
+    "MM3_MOE_ROUTE_COLLECTIVE_EXPERIMENT=1"
+  ],
+  "geometry": {
+    "pa_query": [
+      96,
+      16,
+      128
+    ],
+    "native_a0_partition_rule": "ceil(context_length / 6), not A38 aligned partitions",
+    "pa_scratch_partitions": 6,
+    "merge_variant": "v2",
+    "heads_per_merge_block": 2,
+    "merge_grid": [
+      96,
+      8,
+      1
+    ],
+    "merge_threads": 128,
+    "score_query": [
+      96,
+      1,
+      128
+    ],
+    "score_query_len": 4,
+    "score_requests": 24,
+    "score_capture_capacity": 1048576,
+    "score_grid_at_1m_capacity": [
+      1,
+      24,
+      18
+    ],
+    "score_threads": 256
+  },
+  "kernel_verification": {
+    "optimized_merge": "mm3_grouped_pa_merge_g2",
+    "retained_a0_compute": "paged_attention_decode_sliding_window_head_1",
+    "retained_native_score": "pa_sparse_block_score_decode<",
+    "native_merge_fallback": "pa_decode_ps_reduce_hip_kernel",
+    "absent_in_eligible_m96": [
+      "mm3_a38_paged_attention_head1_hybrid",
+      "pa_decode_ps_reduce_hip_kernel",
+      "mm3_a37_atomic_system_tp_v4_m96_cm1"
+    ],
+    "score_grid_evidence": "Native kernel name is unchanged. Require actual MM3_A41_LAUNCH records on ranks 0..3: cap432, qlen4, 256 threads, grid[1,24,18] at full capture capacity, plus GPU events independently confirming execution.",
+    "other_shapes": "Original A0 score and original PA reducer fallback must remain functional."
+  },
+  "checks": [
+    "python -B -m unittest discover -s . -p test_prepare.py -v; CPU-only adapter/global-binding/fallback tests",
+    "python -B prepare.py; python -B prepare.py --check; deterministic exclusive payload and manifest",
+    "Build-time CPU source audit verifies all untouched exported A0 files, native PA core and native merger header. Runtime loaders retain their source guards.",
+    "Parent: new full-PA correctness against ORIGINAL A0, not the cumulative A38 outputs. All six native partition partial buffers/stats and final outputs must match bitwise.",
+    "Parent: merge eager/graph checks on random, empty, mixed, cancellation, signed-zero, nonfinite and subnormal inputs, with V2/group2 and native AITER compiler flags.",
+    "Parent: repeated complete PA graphs with changed queries/contexts, poisoned buffers, high page IDs, scalar FP8 scales and unchanged KV; include C4 and unsupported-shape fallback.",
+    "Parent: A41 score correctness uses identical prepared FP8 Q/K at 128,8192,9216,131072,1048576, mixed 0/1/3/4/block boundaries, zero/NaN queries and init/local overlap. Compare visible score bits, ordered IDs, all pages/lengths, unchanged cache.",
+    "Do not claim A39 full-PA cumulative evidence proves R6: its donor PA used A38. Reuse isolated merge/A41 evidence only after source equivalence; validate adapted A0 wrapper/API.",
+    "Parent: C24 long-input and C4 correctness with four-rank actual dispatch and score-grid audit.",
+    "Every correctness-valid R6 receives exactly one unprofiled fixed E2E against saved A0, even if flat or slower; no micro-speed gate."
+  ],
+  "fixed_e2e": {
+    "baseline": "../../vllm_c24_baseline/vllm_c24_8k1k.json",
+    "saved_a0_output_tokens_per_second": 2310.4520822142695,
+    "tp": 4,
+    "physical_gpus": [
+      4,
+      5,
+      6,
+      7
+    ],
+    "concurrency": 24,
+    "requests": 240,
+    "input_tokens": 8192,
+    "output_tokens": 1024,
+    "eagle3_draft_tokens": 3,
+    "synthetic_acceptance_length": 2.78,
+    "kv_cache_dtype": "fp8",
+    "block_size": 128,
+    "parent_runner_only": true,
+    "rerun_a0": false,
+    "resume_optimizer": false
+  }
+}

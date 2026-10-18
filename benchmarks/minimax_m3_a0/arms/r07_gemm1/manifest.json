@@ -1,0 +1,41 @@
+{
+  "arm": "r07_gemm1",
+  "base_image_id": "sha256:2695afe0011d4a5c9ab394a8252a590fe0c0ee4497d483e50606e996762952a7",
+  "independent_on_a0": true,
+  "patch_sha256": "48cced49fed0c5ef51ae13224882b5118c03df8e97de682891f3cc5ef06e7425",
+  "files": {
+    "vllm/models/minimax_m3/amd/model.py": {
+      "before_sha256": "14d15efaad32c174700569898d9ee778c72bad9194a1253dba0703c09da6e1ca",
+      "after_sha256": "df72f8a897ee150080160ba2678bbeb4c97fb11273403ad01eadac17b20fa527",
+      "bytes": 75421
+    },
+    "vllm/models/minimax_m3/amd/ops/_r07_g1/__init__.py": {
+      "before_sha256": null,
+      "after_sha256": "bfc2ed8bcc637d3bf2cd4060a2cf819a8316e2e1d00cb3530bd3d6caffa3cd1c",
+      "bytes": 37
+    },
+    "vllm/models/minimax_m3/amd/ops/_r07_g1/act.py": {
+      "before_sha256": null,
+      "after_sha256": "1632853f42132b68e082c5dea073bd6afaf2d00b9b87ec32952a0d75ca2a96bd",
+      "bytes": 4530
+    },
+    "vllm/models/minimax_m3/amd/ops/_r07_g1/fixed_g1.py": {
+      "before_sha256": null,
+      "after_sha256": "a91ff74bf33f0a6fe7384fd8c6773e6efd5aee97185f3b26a1d4f154bc479c28",
+      "bytes": 674
+    },
+    "vllm/models/minimax_m3/amd/ops/_r07_g1/gemm1_slot.py": {
+      "before_sha256": null,
+      "after_sha256": "c070c4ae26b94bbc0188285fde24822c36a476ef2b98df08d8dc2c3a7f61bcd1",
+      "bytes": 25268
+    },
+    "vllm/models/minimax_m3/amd/ops/_r07_g1/integration.py": {
+      "before_sha256": null,
+      "after_sha256": "019a34f238c116d3946e379e53aa4361a77b8c6345d697e210a1c5ffade7d812",
+      "bytes": 5188
+    }
+  },
+  "environment": {},
+  "audit_environment": {},
+  "gpu_validation_of_packaged_version": false
+}

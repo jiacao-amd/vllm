@@ -1,0 +1,106 @@
+diff --git a/vllm/model_executor/layers/fused_moe/router/gate_linear.py b/vllm/model_executor/layers/fused_moe/router/gate_linear.py
+index 1f086b4..1e71b97 100644
+--- a/vllm/model_executor/layers/fused_moe/router/gate_linear.py
++++ b/vllm/model_executor/layers/fused_moe/router/gate_linear.py
+@@ -17,7 +17,7 @@ class GateLinear(ReplicatedLinear):
+     1. cuteDSL ll_bf16_gemm (SM90+, M<=16, bf16 in, fp32 out,
+        K divisible by 8)
+     2. fp32 specialized kernel (SM90+ or gfx950, bf16/fp32 in, fp32 out,
+-       M<=32, model-specific shapes)
++       M<=32 generally and M<=128 for MiniMax-M3 on gfx950)
+     3. bf16x3 CuteDSL kernel (SM100, bf16 in, fp32 weight)
+     4. cuBLAS bf16×bf16→fp32 (SM90+ + bf16 weight + fp32 out_dtype)
+     5. F.linear via ReplicatedLinear (ultimate fallback)
+@@ -218,19 +218,28 @@ def fp32_router_gemm_dispatch_impl(
+     allow_bf16x3_router_gemm: bool,
+ ) -> torch.Tensor:
+     """
+-    Dynamically run fp32 specialized gemm if num_tokens <= FP32_MAX_TOKENS,
++    Dynamically run the fp32 specialized GEMM for supported token ranges,
+     otherwise optionally run the experimental BF16x3 kernel for medium/large
+-    SM100 router batches, then fall back to F.linear.
++    SM100 router batches, then fall back to F.linear. The generic limit is
++    FP32_MAX_TOKENS; gfx950 MiniMax-M3 has a separately tuned M<=128 path.
+     This must be wrapped in a custom op because our torch.compile integration
+     does not support runtime dispatching on num_tokens.
+     """
+-    if x.shape[0] <= _FP32_ROUTER_GEMM_MAX_TOKENS:
+-        if current_platform.is_rocm():
+-            from vllm.model_executor.layers.fused_moe.router.rocm_fp32_router_gemm import (  # noqa: E501
+-                can_use_rocm_fp32_router_gemm,
+-                rocm_fp32_router_gemm,
+-            )
++    max_tokens = _FP32_ROUTER_GEMM_MAX_TOKENS
++    if current_platform.is_rocm():
++        from vllm.model_executor.layers.fused_moe.router.rocm_fp32_router_gemm import (  # noqa: E501
++            can_use_rocm_fp32_router_gemm,
++            rocm_fp32_router_gemm,
++            rocm_fp32_router_gemm_max_tokens,
++        )
+ 
++        max_tokens = rocm_fp32_router_gemm_max_tokens(
++            x.shape[1],
++            weight.shape[0],
++        )
++
++    if x.shape[0] <= max_tokens:
++        if current_platform.is_rocm():
+             x = x.contiguous()
+             if can_use_rocm_fp32_router_gemm(x, weight):
+                 return rocm_fp32_router_gemm(x, weight)
+diff --git a/vllm/model_executor/layers/fused_moe/router/rocm_fp32_router_gemm.py b/vllm/model_executor/layers/fused_moe/router/rocm_fp32_router_gemm.py
+index 785bd8a..654d3dc 100644
+--- a/vllm/model_executor/layers/fused_moe/router/rocm_fp32_router_gemm.py
++++ b/vllm/model_executor/layers/fused_moe/router/rocm_fp32_router_gemm.py
+@@ -9,6 +9,8 @@ from vllm.platforms.rocm import on_gfx950
+ from vllm.triton_utils import tl, triton
+ 
+ _MAX_TOKENS = 32
++_MINIMAX_M3_MAX_TOKENS = 128
++_MINIMAX_M3_SHAPE = (6144, 128)
+ ROCM_FP32_ROUTER_GEMM_SUPPORTED_SHAPES = frozenset(
+     {
+         (3072, 256),
+@@ -69,11 +71,30 @@ def _launch_config(
+     if num_tokens <= 16:
+         block_m = 8 if (hidden_size, num_experts) == (6144, 256) else 4
+         return block_m, 1024, 8
++    if (hidden_size, num_experts) == _MINIMAX_M3_SHAPE and num_tokens > _MAX_TOKENS:
++        if num_tokens <= 80:
++            return 4, 2048, 8
++        if num_tokens <= 100:
++            return 8, 512, 4
++        if num_tokens <= 116:
++            return 8, 512, 2
++        if num_tokens <= 124:
++            return 16, 256, 4
++        return 32, 256, 4
+     if (hidden_size, num_experts) == (3072, 256):
+         return 8, 1024, 8
+     return 4, 2048, 8
+ 
+ 
++def rocm_fp32_router_gemm_max_tokens(
++    hidden_size: int,
++    num_experts: int,
++) -> int:
++    if (hidden_size, num_experts) == _MINIMAX_M3_SHAPE:
++        return _MINIMAX_M3_MAX_TOKENS
++    return _MAX_TOKENS
++
++
+ def can_use_rocm_fp32_router_gemm(
+     hidden_states: torch.Tensor,
+     router_weight: torch.Tensor,
+@@ -114,8 +135,9 @@ def _validate_inputs(
+             "(3072, 256), (4096, 8), (4096, 192), (6144, 128), "
+             "and (6144, 256)"
+         )
+-    if not 0 <= hidden_states.shape[0] <= _MAX_TOKENS:
+-        raise ValueError(f"num_tokens must be in [0, {_MAX_TOKENS}]")
++    max_tokens = rocm_fp32_router_gemm_max_tokens(*shape)
++    if not 0 <= hidden_states.shape[0] <= max_tokens:
++        raise ValueError(f"num_tokens must be in [0, {max_tokens}] for shape {shape}")
+ 
+ 
+ def rocm_fp32_router_gemm(

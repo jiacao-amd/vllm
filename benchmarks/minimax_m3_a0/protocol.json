@@ -1,0 +1,32 @@
+{
+  "protocol_id": "mm3-tp4-c24-8k1k-independent-a0-zero-http-warmup-v1",
+  "http_warmup_requests": 0,
+  "server_startup_initialization_and_graph_capture": "unchanged",
+  "baseline_policy": "One fresh unoptimized A0 on the destination machine; reuse for all eight arms.",
+  "e2e_runs_per_arm": 1,
+  "formal_requests": 240,
+  "max_concurrency": 24,
+  "input_tokens": 8192,
+  "output_tokens": 1024,
+  "seed": 0,
+  "request_rate": "inf",
+  "use_chat_template": true,
+  "ignore_eos": true,
+  "tensor_parallel_size": 4,
+  "main_model": "amd/MiniMax-M3-MXFP4",
+  "main_revision": "229447a2d64149ffb45e454ebeb74b7a9a45ce7d",
+  "draft_model": "Inferact/MiniMax-M3-EAGLE3-GQA",
+  "draft_revision": "96692486b5fd38ebf8fd2a5f6bb53427d30819a8",
+  "num_speculative_tokens": 3,
+  "synthetic_acceptance_length": 2.78,
+  "kv_cache_dtype": "fp8",
+  "block_size": 128,
+  "historical_a0_not_comparable": {
+    "output_throughput": 2310.4520822142695,
+    "http_warmup_requests": 48,
+    "launch_gpu_selection": "0,1,2,3",
+    "reason": "Different warmup protocol and machine/GPU baseline; historical context only."
+  },
+  "excluded": ["AgenticX performance", "C4 performance", "precision changes", "model-computation shortcuts"],
+  "correctness_and_micro": "Run in separate processes/containers before E2E, never as warmup for a formal server. Preserve negative results."
+}
