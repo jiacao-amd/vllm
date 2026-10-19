@@ -1,0 +1,81 @@
+{
+  "accepted_baseline": {
+    "name": "n18_router",
+    "image_id": "sha256:4ffdb314ac94c6d4451de889711a77daef5226e59a8d0cc19c608ffc4b052641",
+    "original_baseline": "n0",
+    "output_throughput": 2546.872092705771,
+    "cumulative_output_throughput_change_pct": 5.494728346956856,
+    "accepted_optimizations": [
+      "n02_score",
+      "n05_pa",
+      "n06_head",
+      "n07_compound",
+      "n12_router",
+      "n16_g1",
+      "n18_router"
+    ],
+    "replaced_configurations": {
+      "n14_g1": "n16_g1"
+    },
+    "result": "runs/n18_router/e2e/e2e_result.json",
+    "result_sha256": "1c391d98511910fc9bb4f6944c7c0adfb5981f986f6229834e7a9c504ffc6c78",
+    "latest_reviewed_experiment": "n18_router",
+    "latest_decision": "runs/n18_router/decision.json",
+    "caveat": "Single E2E per variant; no statistical-significance claim. Numeric >=9% goal remains unmet."
+  },
+  "official_base_commit": "1b2a666391f2a24228a1436b64d547c34cc6b6ce",
+  "official_base_image": "sha256:c6cb4ab021e31691f63a5757278153fbe728a71c722651a4549ddbb5ac3067ab",
+  "release_sha256": {
+    "patches/n02_score/patch_manifest.json": "0e69c9de27a19255168caf34d3f69420b905a000e861e1623505093c3229684d",
+    "patches/n05_sparse_pa/patch_manifest.json": "ca081699f8ddff54c078cf9b19967300bcc624be10a2d7879bed62750cc97014",
+    "patches/n06_draft_head_prepack/integration/patch_manifest.json": "cd5724ab32e7c0cc392a7c07bf689f71f37a9abdb3f9d569859ede509154213b",
+    "patches/n07_fused_draft/n06_v1/patch_manifest.json": "3f66903e6bd51ef3b9839d150a4f3722a034f783be297ffad7d8ae7df263cca5",
+    "patches/n12_router_fused_prefix/patch_manifest.json": "4d124e2218e5410171690222befb364b718abcb5697f321dd95a0db12355ecbe",
+    "patches/n14_g1_wider_tiles/integration/patch_manifest.json": "4c6d5dc65a3c7dc328ee3adc1d0264e118c97e07d342ae1300d2f3c562469584",
+    "patches/n16_g1_exact96/integration/patch_manifest.json": "2fe69815dce7118447f6bb9ae103211ab772d464fd93510df6912d66b86be2a2",
+    "patches/n18_bf16x3_router/integration/patch_manifest.json": "0a67b4456a24cd48495946fb9e6f1b58f6f3cdbcc12558caa440c081813f1435"
+  },
+  "payload_sha256": {
+    "vllm/models/minimax_m3/amd/indexer_aiter.py": "5281b0de46e4505c93e3715d0ec54f3c8ce75f9599cad88caafde472047bd41c",
+    "vllm/models/minimax_m3/amd/ops/_n02_score.py": "f65297cb2b4603f0a7d8cafe94977e6b248405b67c1bdcb06045eabd3ab5a7ef",
+    "vllm/models/minimax_m3/amd/ops/sparse_pa.py": "adbc26f50e833ae6c5b217525978b0d63b34f466022779a547d984a9ad85b799",
+    "vllm/models/minimax_m3/amd/ops/n05_sparse_pa_partition.py": "316769dd6e2ddbd4477e8fda83c13a9ac9ed50511b810bc8e744386901316b7c",
+    "vllm/models/minimax_m3/amd/ops/n05_sparse_pa_runtime.py": "5318ceff5eada0835bb7817dee8fd7b8fb6ee0dad5dfc88b340745380df62bfe",
+    "vllm/v1/worker/gpu/spec_decode/eagle/speculator.py": "dd06bc7afc0bb4d2305cdbeadbd77962bc3c168fa918e4aa1ee98f667806c75d",
+    "vllm/v1/worker/gpu/spec_decode/eagle/_n06_draft_head/__init__.py": "162fa0ac5aec601e655f4f5cdc6deaacb1f939230bb0398ba532b05ec9c8a5ff",
+    "vllm/v1/worker/gpu/spec_decode/eagle/_n06_draft_head/layout.py": "885c57c2015828a6ef4316a81ff11e826f62515d772ddbaeff73141066b4f940",
+    "vllm/v1/worker/gpu/spec_decode/eagle/_n06_draft_head/gpu_pack.py": "45beb8a6b8a9d5ad738bb39cc92e33ef9825dad9f28e19efa0e48b5907e177b9",
+    "vllm/v1/worker/gpu/spec_decode/eagle/_n06_draft_head/packed_head.py": "0080fe1e27969c2d70b88de77bc4bb362c0307b1eeb33911bcd21a8e669e52f0",
+    "vllm/v1/worker/gpu/spec_decode/eagle/_n06_draft_head/runtime.py": "12b12e05cc03e915462a2427070b2496416ef34099c9eb075bbe8cc8c781941c",
+    "vllm/v1/worker/gpu/spec_decode/eagle/_n06_draft_head/generated_gemm.py": "0c044519440f8d308375c90cef31fc4fb5c11a536da1d27100a0d65cde602122",
+    "vllm/v1/worker/gpu/spec_decode/eagle/_n06_draft_head/upstream_source_manifest.json": "2b71aef98245ba8390ee5d69c57512ac2433b1894def080d6327dc431d71144e",
+    "vllm/v1/worker/gpu/spec_decode/eagle/_n06_draft_head/source_manifest.json": "3099300844b65dff2724ffcf19226d8979bb4e3a6fde742633a0245a356f90ae",
+    "vllm/v1/attention/backends/rocm_aiter_unified_attn.py": "c0ecd989a66de408ae434e00ad64cc077bb41ab5f8123b8f598958e45be8a439",
+    "vllm/v1/attention/backends/n07_draft_metadata.py": "b1e829589cdd8657b598557085122e9eb10e271dce30830d5bb580e1fff99345",
+    "vllm/v1/worker/gpu/model_runner.py": "db035854a7c41846f852dc330032264222de7243551a3afd0ea5b61708ae23af",
+    "vllm/v1/worker/gpu/spec_decode/speculator.py": "c27828060e08d93e5de2431591403f5db827c8fe2eca8907a45f6d43e9dfaf69",
+    "vllm/models/minimax_m3/amd/ops/draft_argmax.py": "fa149828276374309f2d0eec338db7b8a11fe3d24ad4011e4aee7060adf36d9b",
+    "vllm/v1/worker/gpu/spec_decode/greedy_rejection_sampler.py": "5ecbc75c7dedef9281ee755e3ca21a6225545828ec3bf642880c0fd6980213ae",
+    "vllm/v1/worker/gpu/spec_decode/sharded_greedy_rejection_sampler.py": "90b6e5698bc41df8cca7b4ec32acaf568c197afc40a65d57986a52e65de5f17c",
+    "vllm/models/minimax_m3/amd/ops/n03_sampling.py": "f149b6cd3596dea388c01401e66bac407aa6cd27d2215657490c31dfc8209216",
+    "vllm/model_executor/layers/fused_moe/router/gate_linear.py": "285f1ec3c9550f64c0bfab7d4704c1c67769fbee8720704ec937f213e0a1a54b",
+    "vllm/model_executor/layers/fused_moe/router/rocm_fp32_router_gemm.py": "95110c3ac8bed661bd7935e4d6bf1f2a39e6e87f7a25d5645e54e21d78e6dd5b",
+    "vllm/_aiter_ops.py": "3bd4260f51ff57aac1a4484cd41e9475efd76689de840b079dd515be2e1a4b6c",
+    "vllm/model_executor/layers/fused_moe/experts/_n14_g1.py": "c5aa5109b0082405125adf95326d6d9c791b7cd4462529aa70e4b41effce4283",
+    "vllm/model_executor/layers/fused_moe/router/_n18_kernel.py": "58dcd1d1fd680ad881795078dab29cd729330af8149ab05d3e6a2350fa4f5767",
+    "vllm/model_executor/layers/fused_moe/router/_n18_router.py": "37e7c9be44120edffdeb0e1c3e2041705f85bdaf0fec9c6d028a5fc828ff29af"
+  },
+  "patch_sha256": "a1d18607428aeba8c73099c9ce91a46d54489497b334297a10dd2dcc16ef7023",
+  "required_additional_environment": {
+    "MM3_SPARSE_PA_PARTITION_EXPERIMENT": "1",
+    "MM3_DRAFT_HEAD_PREPACK_EXPERIMENT": "1",
+    "MM3_SHARDED_GREEDY_VERIFY_EXPERIMENT": "1",
+    "MM3_FUSED_DRAFT_ARGMAX_EXPERIMENT": "1",
+    "MM3_N07_FUSED_DRAFT": "1",
+    "MM3_N14_G1_TN64_K256": "0",
+    "MM3_N16_G1_TN64_K128": "1",
+    "MM3_N18_BF16X3_ROUTER": "1"
+  },
+  "new_build_or_measurement": false,
+  "goal_9pct_achieved": false
+}

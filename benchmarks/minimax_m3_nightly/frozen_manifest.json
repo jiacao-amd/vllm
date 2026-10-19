@@ -1,0 +1,15 @@
+{
+  "install.py": "dee39692b8bd81f44d4cc0ca64e219e6e95164a84c39c7caebd162d4712b7bcd",
+  "run_inside.py": "3db97cbced3bacc5e62feb8262600acf1d0945d8ab9da19435e74917bdf005c1",
+  "accepted_manifest.json": "9d86247d9d6ff654e39c08189dbffaffa9d3d2ce29a4a5f7de4108c5f5f6cf38",
+  "native_manifest.json": "377cd9349942557e69c338cc2822a4a4bef69e7eec2ac5c19839a18ddabbe1d0",
+  "protocol.py": "8f39e4537655af327214e5d4c7af861cb8636519603e2b859104ecb91442c045",
+  "prepare_cache.py": "bc3d5867d125f5b7cc4f44929051310431b6a4b0e0d6fa15c6b21b03421c4c6f",
+  "compile_extension.py": "35b3002ffb76bd362d410f7d59f4e8da1f3f2b87d4ffec8c81e367368062fb68",
+  "model_check.py": "024951c583e408941306a4ca52875e4e3bb91687046e80b4e9600a730b473fd4",
+  "reference_run_e2e.py": "9eef4528411b77939eab6fbbf8cc345bd74eb14f28efca67809116e5127db512",
+  "client/backend_request_func.py": "4ebf482eb32685e59ed69bd39c51e9f1fd2134f5e9b8fe7ad10550d40ecca16c",
+  "client/benchmark_serving.py": "9bb3e5096ddc74398f8a33ec2dc7c787afa6ae7bf8f5dd2c8b2e387a280a7785",
+  "client/benchmark_utils.py": "b99a18940871b701e9e65c2cc098da1c5d33fc3f9d3890f8d2cddc539a9e3d51",
+  "client/encoding_dsv4.py": "bdbd57c132a1b3725042323d02b98b9d1df28e5f388f134399555d041f5055e0"
+}
