@@ -388,6 +388,10 @@ class _GateLinearMethod(UnquantizedLinearMethod):
         # nothing breaks today only because platform_supported() is False on
         # CPU.
         super().process_weights_after_loading(layer)
+        from vllm.model_executor.layers.fused_moe.router._n18_router import (
+            begin_prepare, finish_prepare,
+        )
+        _n18_ticket = begin_prepare(layer)
         if not layer.allow_rocm_bf16x3_router_gemm:
             return
         try:
@@ -396,6 +400,7 @@ class _GateLinearMethod(UnquantizedLinearMethod):
             )
 
             layer._bf16x3_weight = bf16x3_router_gemm_rocm.split_bf16x3(layer.weight)
+            finish_prepare(_n18_ticket, layer)
         except ValueError as exc:
             layer.allow_rocm_bf16x3_router_gemm = False
             logger.warning_once(
@@ -423,11 +428,20 @@ def rocm_bf16x3_router_gemm_dispatch_impl(
         bf16x3_router_gemm_rocm,
     )
 
+    from vllm.model_executor.layers.fused_moe.router.rocm_fp32_router_gemm import (  # noqa: E501
+        rocm_fp32_router_gemm_max_tokens,
+    )
+
     if bf16x3_router_gemm_rocm.is_supported(x, weight):
         return bf16x3_router_gemm_rocm.bf16x3_router_gemm(x, weight_split)
+    if x.shape[0] == 96:
+        from vllm.model_executor.layers.fused_moe.router._n18_router import maybe_run
+        output = maybe_run(x, weight, weight_split)
+        if output is not None:
+            return output
     # Below MIN_TOKENS, hand back to the low-M gfx950 kernel this tier is
     # checked ahead of.
-    if x.shape[0] <= _FP32_ROUTER_GEMM_MAX_TOKENS:
+    if x.shape[0] <= rocm_fp32_router_gemm_max_tokens(weight):
         from vllm.model_executor.layers.fused_moe.router.rocm_fp32_router_gemm import (  # noqa: E501
             can_use_rocm_fp32_router_gemm,
             rocm_fp32_router_gemm,
@@ -469,9 +483,10 @@ def fp32_router_gemm_dispatch_impl(
         from vllm.model_executor.layers.fused_moe.router.rocm_fp32_router_gemm import (  # noqa: E501
             can_use_rocm_fp32_router_gemm,
             rocm_fp32_router_gemm,
+            rocm_fp32_router_gemm_max_tokens,
         )
 
-        if x.shape[0] <= _FP32_ROUTER_GEMM_MAX_TOKENS:
+        if x.shape[0] <= rocm_fp32_router_gemm_max_tokens(weight):
             x = x.contiguous()
             if can_use_rocm_fp32_router_gemm(x, weight):
                 return rocm_fp32_router_gemm(x, weight)

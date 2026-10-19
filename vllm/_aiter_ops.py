@@ -387,7 +387,12 @@ def _rocm_aiter_fused_moe_impl(
         # build new enough to accept it.
         extra_kwargs["quant_dtype_a"] = q_dtype_a
 
-    return fused_moe(
+    from vllm.model_executor.layers.fused_moe.experts._n14_g1 import (
+        fused_moe as n14_fused_moe,
+    )
+
+    return n14_fused_moe(
+        fused_moe,
         hidden_states,
         w1,
         w2,

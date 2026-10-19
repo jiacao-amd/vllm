@@ -472,6 +472,7 @@ def minimax_m3_sparse_attn_decode_aiter(
         output,
         k_scale,
         v_scale,
+        _n05_decode=decode_query_len == 4,
     )
 
 
@@ -531,6 +532,8 @@ def _run_gluon_decode(
     output: torch.Tensor,
     k_scale: torch.Tensor | None,
     v_scale: torch.Tensor | None,
+    *,
+    _n05_decode: bool = False,
 ) -> None:
     from aiter import dtypes as aiter_dtypes
     from aiter.ops.triton.gluon.pa_decode_gluon import (
@@ -560,6 +563,15 @@ def _run_gluon_decode(
     num_seqs = total_q * num_kv_heads
     max_context_partition_num = get_recommended_splits(num_seqs, 1)
     context_partition_size = 256
+    if _n05_decode:
+        from .n05_sparse_pa_runtime import select_decode
+
+        selected_decode = select_decode(
+            q, k_cache, v_cache, sparse_bt, sparse_ctx, output, num_kv_heads,
+            max_context_partition_num, k_scale, v_scale, sm_scale,
+        )
+        if selected_decode is not None:
+            pa_decode_gluon = selected_decode
     intermediate_shape = (num_seqs, 1, max_context_partition_num, group_size)
     exp_sums = torch.empty(intermediate_shape, dtype=torch.float32, device=q.device)
     max_logits = torch.empty_like(exp_sums)

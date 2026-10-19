@@ -1,0 +1,130 @@
+{
+  "arm": "n06_draft_head_prepack",
+  "bundle_version": "n06-draft-head-prepack-v2",
+  "previous_manifest_file": "source_manifest.v1.json",
+  "previous_manifest_sha256": "7010f1be6be69fa644537d9483ae0e3edc886db6fa4d6840809ebcc52790a133",
+  "revision": "Isolate dynamic compilation from caller future flags; generated GEMM and arithmetic unchanged",
+  "base_image": "sha256:c6cb4ab021e31691f63a5757278153fbe728a71c722651a4549ddbb5ac3067ab",
+  "base_commit": "1b2a666391f2a24228a1436b64d547c34cc6b6ce",
+  "native_manifest_sha256": "377cd9349942557e69c338cc2822a4a4bef69e7eec2ac5c19839a18ddabbe1d0",
+  "native_sources": {
+    "aiter/ops/flydsl/kernels/gemm_a16w16_gfx950.py": "78b4a80a1fd55abb0463ccee5720b2d36b65534c7dcffce90e59a6914b765df4",
+    "aiter/ops/flydsl/kernels/gemm_a16w16_gfx950_utils.py": "7a4cc7bb1e6535298ab300bddc0a43fae4d76ed4ef16f2fb68633050405eceb4",
+    "aiter/ops/flydsl/kernels/kernels_common.py": "5e0db26d92749ea8b356751a08bedc3e7f950458cce65427f8aea6bb34a42f30",
+    "aiter/ops/flydsl/kernels/tensor_shim.py": "7911222eb24fbd799b99575a118b0933d91758441e151f394f286d6d03434755",
+    "aiter/ops/flydsl/gemm_kernels.py": "f2eaa74463ad0a2b175b42078d84f3b3006f19f386a0b903cbc8cd7d83c47cbc",
+    "aiter/ops/flydsl/gemm_a16w16_policy.py": "c844471f15135f065c9b67d3d966e2a0611e988975a4ba0a4a5339356cc4efa2",
+    "aiter/tuned_gemm.py": "9970655f7fd9c98a92bd42dc28342b5caf099d0bf3b83580f6aa4631a12aae4c",
+    "aiter/configs/model_configs/minimax_m3_eagle_bf16_tuned_gemm.csv": "a56cfcb960e891be97bfd03f9e670faced469935f54cf8ef6d0a9dc1366e1fa5",
+    "vllm/model_executor/layers/utils.py": "7c102381e4a48cd3d5893548de7280362938b39104a1c0375ecee5969d881262",
+    "vllm/model_executor/layers/linear.py": "543cfa609eff5777d7210f6d5416cf26d35cc1f4f37f321040ca0cf1c6731931",
+    "vllm/model_executor/layers/logits_processor.py": "35cf8235cb529ba2d37358fe9b9e5a29f40b5c3cbcc9e6750c8480c51bd7da83",
+    "vllm/model_executor/layers/vocab_parallel_embedding.py": "0a25685b16b295d0c9f7127ae48fc7cc86d2a961e4e7e7bd8879354540225f44",
+    "vllm/distributed/parallel_state.py": "4868c55bf8e29cb5ee20cb072aab793fa0532624b742ec1a86eb8338af8ca672"
+  },
+  "packages": {
+    "vllm": "0.32.0rc1.dev369+g1b2a66639.rocm72",
+    "torch": "2.13.0+git733fca1",
+    "triton": "3.8.0+git669b31ac",
+    "amd-aiter": "0.1.25",
+    "flydsl": "0.3.4.1",
+    "transformers": "5.19.0",
+    "numpy": "2.3.5",
+    "aiohttp": "3.14.5",
+    "huggingface-hub": "2.2.0",
+    "tokenizers": "0.23.3"
+  },
+  "python": "3.12.15",
+  "hip": "7.2.53211",
+  "history": {
+    "a70_v2_numerics_passed": true,
+    "a70_v2_timed": false,
+    "historical_result_sha256": "12bbfbe7bc2c77e7679bae53574bfb070b6deec7efcbb82e1cd58bc686a75bac",
+    "native_function_differences": [
+      "_dynamic_tensor_arg",
+      "get_split_k_buffers"
+    ],
+    "additional_import_changes": [
+      "persistent_alloc",
+      "kernels_common.run_cached"
+    ],
+    "helper_stack": "Current utils/tensor_shim/FlyDSL retained; old helper ABI is not transplanted",
+    "old_workspace_bug": "v1 captured integer fills after priming another stream; v2 primed its capture stream",
+    "numerical_evidence_reused_as_current_gate": false,
+    "performance_reused": false
+  },
+  "proof": {
+    "byte_exact_restoration": true,
+    "native_n_clamp_and_k_swizzle_preserved": true,
+    "a_load_pipeline_mfma_rounding_split_protocol_preserved": true,
+    "launch_abi": [
+      "out",
+      "a",
+      "b",
+      "bias",
+      "semaphore",
+      "signal",
+      "split_k",
+      "param",
+      "stream"
+    ],
+    "logical_n": "out.shape[1]",
+    "physical_b_shape": [
+      6144,
+      50176
+    ],
+    "output_shape": [
+      24,
+      50016
+    ]
+  },
+  "config": {
+    "block_m": 32,
+    "block_n": 256,
+    "block_k": 64,
+    "stages": 2,
+    "split_k": 2,
+    "m_waves": 1,
+    "n_waves": 4,
+    "k_waves": 1,
+    "group_m": 0,
+    "use_half_tile_interleaved": false
+  },
+  "csv_configuration_only": {
+    "bias": "False",
+    "dtype": "torch.bfloat16",
+    "outdtype": "torch.bfloat16",
+    "scaleAB": "False",
+    "bpreshuffle": "False",
+    "libtype": "flydsl",
+    "splitK": "2",
+    "kernelName": "flydsl_hgemm_abf16_wbf16_bf16_t32x256x64x2_ks2_w1x4x1_bias0_ktail0_gm0_pft_gfx950"
+  },
+  "production_dispatch_gate": "Priming must observe the exact current flydsl_hgemm call; CSV alone is insufficient",
+  "format": "n06-bf16-nt256-kt64-v1",
+  "memory_bytes_per_gpu": {
+    "original_bytes": 614596608,
+    "packed_bytes": 616562688,
+    "extra_resident_bytes": 616562688,
+    "combined_bytes": 1231159296,
+    "padding_bytes": 1966080
+  },
+  "generated_sha256": "0c044519440f8d308375c90cef31fc4fb5c11a536da1d27100a0d65cde602122",
+  "patch_sha256": "f6f60e7a0ba36343e001c6283783978213b5c84607a94e0a9e86f2ef833417b8",
+  "source_sha256": {
+    "layout.py": "885c57c2015828a6ef4316a81ff11e826f62515d772ddbaeff73141066b4f940",
+    "source_transform.py": "8e1c8f6672911199ba8f3fb059c1e578da596239839c4a134de8310f954b4a4c",
+    "gpu_pack.py": "45beb8a6b8a9d5ad738bb39cc92e33ef9825dad9f28e19efa0e48b5907e177b9",
+    "packed_head.py": "86bceed2686746d127202afc35b44baf77e6e878702898df3fb52585a79da8db",
+    "capture.py": "1d900d2161a500d09ed407cb4f2895e1e7547560528d4817d9c728f6880bf494",
+    "audit_installed.py": "348269c0ce5251191219c25117ec2e7451448f9d8ca447b99945b8b12c3ee9ba",
+    "test_annotations.py": "f4c6cdf1a6a0baf13959cd156598c36512fe374e618373df20a905fab9fc5f1f",
+    "v1_snapshot.json": "8ab273a610d56dbb85e00b8174a2dda82ced55a1b69230841f29db8c58e2671a"
+  },
+  "native_installed_files_modified": false,
+  "gpu_executed": false,
+  "numerics_verified_on_nightly": false,
+  "performance_measured": false,
+  "e2e_eligible": false,
+  "status": "Feasible bounded source port; current-GPU full-head validation required"
+}

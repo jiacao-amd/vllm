@@ -67,14 +67,36 @@ def _rocm_fp32_router_gemm_kernel(
     )
 
 
+def rocm_fp32_router_gemm_max_tokens(router_weight: torch.Tensor) -> int:
+    """Extend only the MiniMax-M3 FP32-weight router beyond the nightly limit."""
+    if router_weight.dtype == torch.float32 and router_weight.shape == (128, 6144):
+        return 128
+    return _MAX_TOKENS
+
+
 def _launch_config(
-    num_experts: int, num_tokens: int, bf16_weight: bool
+    num_experts: int, num_tokens: int, bf16_weight: bool,
+    *, hidden_size: int | None = None,
 ) -> tuple[int, int, int]:
     """Return (BLOCK_M, BLOCK_K, num_warps), swept on MI355 for M<=32.
 
     One program computes BLOCK_M tokens for one expert, so narrow routers keep
     BLOCK_M=1 to fill the GPU and wide routers grow BLOCK_M to reuse weights.
     """
+    if (
+        not bf16_weight
+        and (hidden_size, num_experts) == (6144, 128)
+        and 32 < num_tokens <= 128
+    ):
+        if num_tokens <= 80:
+            return 4, 2048, 8
+        if num_tokens <= 100:
+            return 8, 512, 4
+        if num_tokens <= 116:
+            return 8, 512, 2
+        if num_tokens <= 124:
+            return 16, 256, 4
+        return 32, 256, 4
     if bf16_weight:
         return (1 if num_tokens <= 4 else 2), 1024, 2
     if num_experts < 64:
@@ -125,8 +147,9 @@ def _validate_inputs(
         raise ValueError("hidden_states and router_weight must be contiguous")
     if router_weight.shape[1] != hidden_states.shape[1]:
         raise ValueError("router_weight and hidden_states hidden sizes differ")
-    if not 0 <= hidden_states.shape[0] <= _MAX_TOKENS:
-        raise ValueError(f"num_tokens must be in [0, {_MAX_TOKENS}]")
+    max_tokens = rocm_fp32_router_gemm_max_tokens(router_weight)
+    if not 0 <= hidden_states.shape[0] <= max_tokens:
+        raise ValueError(f"num_tokens must be in [0, {max_tokens}]")
     if hidden_states.shape[0] * router_weight.numel() >= _MAX_MACS:
         raise ValueError(
             f"num_tokens * num_experts * hidden_size must be < {_MAX_MACS}"
@@ -155,7 +178,8 @@ def rocm_fp32_router_gemm(
         return output
 
     block_m, block_k, num_warps = _launch_config(
-        num_experts, num_tokens, router_weight.dtype == torch.bfloat16
+        num_experts, num_tokens, router_weight.dtype == torch.bfloat16,
+        hidden_size=hidden_size,
     )
     block_k = min(block_k, triton.next_power_of_2(hidden_size))
     grid = (triton.cdiv(num_tokens, block_m) * num_experts,)

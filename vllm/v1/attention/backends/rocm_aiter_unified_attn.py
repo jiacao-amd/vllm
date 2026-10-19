@@ -48,6 +48,30 @@ def _kv_connector_enabled() -> bool:
 
 
 class RocmAiterUnifiedAttentionMetadataBuilder(RocmAttentionMetadataBuilder):
+    def __init__(self, kv_cache_spec, layer_names, vllm_config, device):
+        super().__init__(kv_cache_spec, layer_names, vllm_config, device)
+        from .n07_draft_metadata import eligible
+
+        self._n07_enabled = eligible(vllm_config)
+        self.supports_draft_decode_metadata_update = self._n07_enabled
+
+    def build(self, common_prefix_len, common_attn_metadata, fast_build=False):
+        metadata = super().build(
+            common_prefix_len, common_attn_metadata, fast_build=fast_build
+        )
+        if self._n07_enabled and metadata.max_query_len == 1:
+            from .n07_draft_metadata import certify
+
+            certify(metadata, common_attn_metadata)
+        return metadata
+
+    def update_draft_decode_metadata(self, metadata):
+        if not self._n07_enabled:
+            return super().update_draft_decode_metadata(metadata)
+        from .n07_draft_metadata import refresh
+
+        return refresh(metadata)
+
     def build_for_cudagraph_capture(
         self, common_attn_metadata: CommonAttentionMetadata
     ) -> RocmAttentionMetadata:

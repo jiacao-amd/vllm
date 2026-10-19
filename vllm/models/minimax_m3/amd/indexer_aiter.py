@@ -444,9 +444,11 @@ class MiniMaxM3IndexerAiterImpl(MiniMaxM3IndexerImpl):
         prefill_page16_block_table: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor | None, torch.Tensor | None]:
         from aiter.ops.msa_attention import (
-            pa_sparse_block_score_decode,
             pa_sparse_block_score_prefill,
             pa_sparse_block_topk,
+        )
+        from vllm.models.minimax_m3.amd.ops._n02_score import (
+            score_decode as pa_sparse_block_score_decode,
         )
 
         attn_metadata = get_forward_context().attn_metadata
