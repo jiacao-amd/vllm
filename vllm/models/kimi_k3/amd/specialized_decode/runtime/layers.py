@@ -198,14 +198,6 @@ class WholeLayer(_Layer):
 
 
 class FfnLayer(_Layer):
-    def __init__(self, layer, runner: MonoRunner, width: int):
-        super().__init__(layer, runner, width)
-        from vllm.models.kimi_k3.amd.specialized_decode.runtime.mla import (
-            install_on_layer,
-        )
-
-        install_on_layer(layer)
-
     def launch(self, step: "Step", positions, prefix_sum, block_residual, prefix_delta):
         from vllm.models.kimi_k3.amd.linear import _apply_attn_res
 

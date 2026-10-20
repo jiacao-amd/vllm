@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
+# ruff: noqa: INP001 - standalone three-file benchmark bundle
 # Derived from the MFMA32 forward in pytorch/pytorch#194309.
 """gfx950 compressed MLA decode, derived from PR194309's MFMA32 forward.
 
