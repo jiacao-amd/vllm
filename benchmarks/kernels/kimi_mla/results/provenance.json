@@ -1,0 +1,20 @@
+{
+  "vllm_branch_base": "989829c0beb9d5270fbf4c560565c0212b7d0d88",
+  "original_integration_source": "033f35bf2f26497c882b829a583b0e3eb001f2a3",
+  "measured_kernel_sha256": "864f7488249f8df6778b3f8e786c9ce1a6f14705a039b2d3e6f0c257070bae22",
+  "packaged_kernel_sha256": "c0ab3f09afa664aed87afe9e42681a3a786ae9e91510b60319c0244dc97509ac",
+  "gpu_builder_ast_unchanged": true,
+  "adapter_ast_unchanged": true,
+  "host_api_change": "torch.cuda.current_device() -> torch.accelerator.current_device_index()",
+  "packaged_scripts_rerun_on_gpu": false,
+  "full_engine_tp8_quality_evaluated": false,
+  "files": {
+    "vllm/models/kimi_k3/amd/specialized_decode/mono/mla_decode.py": "c0ab3f09afa664aed87afe9e42681a3a786ae9e91510b60319c0244dc97509ac",
+    "vllm/models/kimi_k3/amd/specialized_decode/runtime/mla.py": "5aa0960e242b8eb10b2a5d9ee318664a97be75c7c62e3c0d1c7f442beaeae181",
+    "benchmarks/kernels/kimi_mla/confirm_config.json": "e2c3850cd19066785b22f1a744d15dc3495c80ff6271ba61c0a78100e742bb54",
+    "benchmarks/kernels/kimi_mla/production_config.json": "fd3c9b4ae5209aad2460c50850d48d59ecffc8d008fe53bddd076650be97cff9",
+    "benchmarks/kernels/kimi_mla/results/comparison_final.json": "4dabd308188cc6b67586349fb9a94dd3e18aff4101f8717dfa5146d3ffdbf5f8",
+    "benchmarks/kernels/kimi_mla/results/validation_final.json": "c051c1ad1fba207e5f0c442087962b26b29deff6e9c6fd68f216387a27fdbaee",
+    "benchmarks/kernels/kimi_mla/results/comparison_confirm.json": "aa2e1e061cb8de3329aeb14761fa55d82e8862d981efe0315127243511f053ee"
+  }
+}

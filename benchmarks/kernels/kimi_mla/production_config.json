@@ -1,0 +1,62 @@
+{
+  "8192": {
+    "splits": 42,
+    "waves": 4,
+    "value_tile": 512,
+    "reuse_lds": true,
+    "pipeline": true,
+    "partial_bf16": true,
+    "dynamic_splits": true,
+    "prob_scale": 256.0
+  },
+  "8200": {
+    "splits": 42,
+    "waves": 4,
+    "value_tile": 512,
+    "reuse_lds": true,
+    "pipeline": true,
+    "partial_bf16": true,
+    "dynamic_splits": true,
+    "prob_scale": 256.0
+  },
+  "9216": {
+    "splits": 42,
+    "waves": 4,
+    "value_tile": 512,
+    "reuse_lds": true,
+    "pipeline": true,
+    "partial_bf16": true,
+    "dynamic_splits": true,
+    "prob_scale": 256.0
+  },
+  "65536": {
+    "splits": 42,
+    "waves": 4,
+    "value_tile": 512,
+    "reuse_lds": true,
+    "pipeline": true,
+    "partial_bf16": true,
+    "dynamic_splits": true,
+    "prob_scale": 256.0
+  },
+  "65544": {
+    "splits": 42,
+    "waves": 4,
+    "value_tile": 512,
+    "reuse_lds": true,
+    "pipeline": true,
+    "partial_bf16": true,
+    "dynamic_splits": true,
+    "prob_scale": 256.0
+  },
+  "262144": {
+    "splits": 42,
+    "waves": 4,
+    "value_tile": 512,
+    "reuse_lds": true,
+    "pipeline": true,
+    "partial_bf16": true,
+    "dynamic_splits": true,
+    "prob_scale": 256.0
+  }
+}
