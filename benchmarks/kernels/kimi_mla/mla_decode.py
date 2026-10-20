@@ -2,12 +2,14 @@
 # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
 # ruff: noqa: INP001 - standalone three-file benchmark bundle
 # Derived from the MFMA32 forward in pytorch/pytorch#194309.
-"""gfx950 compressed MLA decode, derived from PR194309's MFMA32 forward.
+"""gfx950 K3 MLA decode and prefill, derived from PR194309's MFMA32 forward.
 
 Conc1: Q[Sq,H,576], token-indexed FP8 KV[N,576], O[Sq,H,512].
 The index table maps rank-local logical tokens to physical cache slots. Global
 sequence length includes the verify block; DCP is token round robin. Both output
 and natural-log LSE are returned for vLLM's cross-rank attention merge.
+Prefill uses decompressed Q/K[ S,12,192 ] and V[ S,12,128 ]; see
+KimiMLAPrefillPlan for its BF16/FP8 interface.
 """
 
 import functools
@@ -614,4 +616,506 @@ class KimiMLADecodePlan:
             lse if self.return_lse else self._unused_lse,
             stream=stream,
         )
+        return output, lse
+
+
+def _prefill_pack8(vec):
+    a = Vec(vec).to(fx.Float32)
+    words = []
+    for i in fx.range_constexpr(2):
+        w = fx.rocdl.cvt_pk_fp8_f32(T.i32, a[i * 4], a[i * 4 + 1], fx.Int32(0), 0)
+        w = fx.rocdl.cvt_pk_fp8_f32(T.i32, a[i * 4 + 2], a[i * 4 + 3], w, 1)
+        words.append(fx.Int32(w))
+    return Vec.from_elements(words, fx.Int32).bitcast(fx.Float8E4M3FN)
+
+
+@functools.lru_cache(None)
+def _build_prefill(s, *, bf16_input, waves, kv_tile):
+    threads = waves * 64
+    conditional_rescale = s >= 32768
+    tm, tn, dk, dv = (waves * 32, kv_tile, 192, 128)
+    reduction_depth = int(math.log2(tn // 2))
+    nblocks = (s + tm - 1) // tm
+    tile_bytes = tn * (dk + dv)
+    input_type = fx.BFloat16 if bf16_input else fx.Float8E4M3FN
+    sm_scale = math.log2(math.e) / math.sqrt(dk)
+
+    @fx.struct
+    class Shared:
+        kv: fx.Array[fx.BFloat16, tile_bytes, 16]
+
+    @flyc.kernel(known_block_size=[threads, 1, 1])
+    def kernel(q: fx.Tensor, k: fx.Tensor, v: fx.Tensor, o: fx.Tensor, lse: fx.Tensor):
+        tid = fx.Int32(fx.thread_idx.x)
+        lane, wave = (tid % 64, tid // 64)
+        head = fx.Int32(fx.block_idx.x)
+        block = fx.Int32(fx.block_idx.y)
+        block = fx.Int32(nblocks - 1) - block
+        qb = _global(q, s * 12 * dk)
+        kb = _global(k, s * 12 * dk)
+        vb = _global(v, s * 12 * dv)
+        ob = _global(o, s * 12 * dv)
+        lb = _global(lse, s * 12)
+        lds = fx.SharedAllocator().allocate(Shared).peek()
+        ptr = fx.recast_iter(fx.Float8E4M3FN, lds.kv.ptr)
+        mma = fx.make_tiled_mma(
+            fx.make_mma_atom(fx.rocdl.MFMA(32, 32, 16, fx.BFloat16)),
+            fx.make_layout((1, 1, 1), (1, 1, 1)),
+        )
+        thr = mma.get_slice(lane)
+        cc = thr.partition_C(fx.make_view(0, fx.make_layout((32, 32), (1, 0))))
+        rc = thr.partition_C(fx.make_view(0, fx.make_layout((32, 32), (0, 1))))
+        row = block * tm + wave * 32 + fx.Int32(fx.get_scalar(rc[0]))
+        safe_row = (row < s).select(row, fx.Int32(0))
+        limit = row + 1
+        tile_end = ((block + 1) * tm + tn - 1) // tn
+        tile_end = (tile_end < (s + tn - 1) // tn).select(
+            tile_end, fx.Int32((s + tn - 1) // tn)
+        )
+        kl = fx.make_layout(((8, tn // 8), (16, dk // 16)), ((16, 8 * dk), (1, 8 * 16)))
+        vl = _value_layout(tn, dv)
+        vml = fx.composition(
+            fx.select(vl, [1, 0]),
+            fx.make_tile(
+                fx.make_layout(dv, 1),
+                fx.make_layout((4, 2, 2, tn // 16), (1, 8, 4, 16)),
+            ),
+        )
+        trans = fx.make_copy_atom(fx.rocdl.cdna4.LDSReadTrans(8, 64), fx.Float8E4M3FN)
+        cv = fx.make_tiled_copy_A(trans, mma).get_slice(lane)
+
+        def load8(buf, offset):
+            frag = fx.make_rmem_tensor(8, input_type)
+            fx.copy(
+                fx.make_copy_atom(
+                    fx.rocdl.BufferCopy128b()
+                    if bf16_input
+                    else fx.rocdl.BufferCopy64b(),
+                    input_type,
+                ),
+                fx.make_view(fx.get_iter(buf) + offset, fx.make_layout(8, 1)),
+                frag,
+            )
+            if const_expr(bf16_input):
+                return _prefill_pack8(frag.load())
+            return Vec(frag.load())
+
+        qr = []
+        for step in fx.range_constexpr(3):
+            words = []
+            for pack in fx.range_constexpr(4):
+                vals = load8(
+                    qb,
+                    (safe_row * 12 + head) * dk
+                    + step * 64
+                    + lane // 32 * 32
+                    + pack * 8,
+                ).bitcast(fx.Int32)
+                words.extend([vals[0], vals[1]])
+            qr.append(Vec.from_elements(words, fx.Int32))
+
+        def prefetch(buf, base, dim, layout):
+            inv = fx.right_inverse(layout)
+            # The final speculative prefetch must stay inside the allocation.
+            base = (base < s).select(base, fx.Int32(0))
+            frags = []
+            for it in fx.range_constexpr(tn * dim // (threads * 8)):
+                logical = fx.Int32(
+                    fx.get_scalar(fx.crd2idx((it * threads + tid) * 8, inv))
+                )
+                token = base + logical % tn
+                frags.append(load8(buf, (token * 12 + head) * dim + logical // tn))
+            return frags
+
+        def store(frags, pointer, dim):
+            dst = fx.logical_divide(
+                fx.make_view(pointer, fx.make_layout(tn * dim, 1)), fx.make_layout(8, 1)
+            )
+            for it in fx.range_constexpr(tn * dim // (threads * 8)):
+                frag = fx.make_rmem_tensor(8, fx.Float8E4M3FN)
+                frag.store(Vec(frags[it]))
+                fx.copy(
+                    fx.make_copy_atom(fx.UniversalCopy64b(), fx.Float8E4M3FN),
+                    frag,
+                    fx.slice(dst, (None, it * threads + tid)),
+                )
+
+        kk = prefetch(kb, fx.Int32(0), dk, kl)
+        vv = prefetch(vb, fx.Int32(0), dv, vl)
+        store(kk, ptr, dk)
+        store(vv, ptr + tn * dk, dv)
+        fx.gpu.barrier()
+        zero = Vec.filled(16, 0.0, fx.Float32)
+        initial = [fx.Float32(-1e30), fx.Float32(0.0)] + [zero for _ in range(4)]
+
+        def process(tile, args, stage):
+            tile = fx.Int32(tile)
+            mx, sm = (fx.Float32(args[0]), fx.Float32(args[1]))
+            acc = [args[2 + d] for d in fx.range_constexpr(4)]
+            kp = ptr + stage * tile_bytes
+            vp = kp + tn * dk
+            nxt = ptr + (1 - stage) * tile_bytes
+            nk = prefetch(kb, (tile + 1) * tn, dk, kl)
+            nv = prefetch(vb, (tile + 1) * tn, dv, vl)
+            scores = [zero for _ in range(tn // 32)]
+            for step in fx.range_constexpr(3):
+                for half in fx.range_constexpr(tn // 32):
+                    shared = fx.logical_divide(
+                        fx.slice(fx.make_view(kp, kl), (lane % 32 + half * 32, None)),
+                        fx.make_layout(16, 1),
+                    )
+                    words = []
+                    for pack in fx.range_constexpr(2):
+                        frag = fx.make_rmem_tensor(16, fx.Float8E4M3FN)
+                        fx.copy(
+                            fx.make_copy_atom(fx.UniversalCopy128b(), fx.Float8E4M3FN),
+                            fx.slice(shared, (None, step * 4 + lane // 32 * 2 + pack)),
+                            frag,
+                        )
+                        w = Vec(frag.load()).bitcast(fx.Int32)
+                        words.extend([w[j] for j in fx.range_constexpr(4)])
+                    kr = Vec.from_elements(words, fx.Int32)
+                    scores[half] = Vec(
+                        fx.rocdl.mfma_scale_f32_32x32x64_f8f6f4(
+                            T.vec(16, T.f32),
+                            [
+                                kr.ir_value(),
+                                Vec(qr[step]).ir_value(),
+                                Vec(scores[half]).ir_value(),
+                                0,
+                                0,
+                                0,
+                                fx.Int32(2139062143).ir_value(),
+                                0,
+                                fx.Int32(2139062143).ir_value(),
+                            ],
+                        )
+                    )
+            fx.rocdl.sched_barrier(0)
+            store(nk, nxt, dk)
+            store(nv, nxt + tn * dk, dv)
+            vals = [
+                fx.Float32(Vec(scores[i // 16])[i % 16]) * sm_scale
+                for i in fx.range_constexpr(tn // 2)
+            ]
+            available = limit - tile * tn - fx.Int32(fx.get_scalar(cc[0]))
+            if tile * tn + tn > block * tm:
+                for half in fx.range_constexpr(tn // 32):
+                    for j in fx.range_constexpr(16):
+                        visible = available > half * 32 + j // 4 * 8 + j % 4
+                        vals[half * 16 + j] = visible.select(
+                            vals[half * 16 + j], fx.Float32(float("-inf"))
+                        )
+            levels = vals
+            for d in fx.range_constexpr(reduction_depth):
+                levels = [
+                    levels[i * 2].maximumf(levels[i * 2 + 1])
+                    for i in fx.range_constexpr(tn // 4 >> d)
+                ]
+            m = (
+                levels[0]
+                .maximumf(fx.Float32(fx.gpu.shuffle_xor(levels[0], 32, 64)))
+                .maximumf(mx)
+            )
+            if const_expr(conditional_rescale):
+                # Rescale only when a row's running maximum increases.
+                rescale = fx.Uint64(
+                    fx.rocdl.ballot(T.i64, (m > mx).ir_value())
+                ) != fx.Uint64(0)
+                corr = fx.Float32(1.0)
+                if rescale:
+                    corr = _exp(mx - m)
+                    for d in fx.range_constexpr(4):
+                        acc[d] = Vec(acc[d]) * Vec.from_elements(
+                            [corr], fx.Float32
+                        ).broadcast_to(16)
+            else:
+                corr = _exp(mx - m)
+            exponent_max = m - 8.0
+            probs = [_exp(vals[i] - exponent_max) for i in fx.range_constexpr(tn // 2)]
+            levels = probs
+            for d in fx.range_constexpr(reduction_depth):
+                levels = [
+                    levels[i * 2] + levels[i * 2 + 1]
+                    for i in fx.range_constexpr(tn // 4 >> d)
+                ]
+            total = (
+                sm * corr
+                + levels[0]
+                + fx.Float32(fx.gpu.shuffle_xor(levels[0], 32, 64))
+            )
+            prs = []
+            for part in fx.range_constexpr(tn // 64):
+                pwords = []
+                for pack in fx.range_constexpr(4):
+                    pv = Vec.from_elements(
+                        [
+                            probs[part * 32 + pack * 8 + j]
+                            for j in fx.range_constexpr(8)
+                        ],
+                        fx.Float32,
+                    )
+                    w = _prefill_pack8(pv).bitcast(fx.Int32)
+                    pwords.extend([w[0], w[1]])
+                prs.append(Vec.from_elements(pwords, fx.Int32))
+            value_tiles = fx.flat_divide(fx.make_view(vp, vml), (32, 16))
+            cvv = Vec.from_elements([corr], fx.Float32).broadcast_to(16)
+            for d in fx.range_constexpr(4):
+                if const_expr(conditional_rescale):
+                    scaled = Vec(acc[d])
+                else:
+                    scaled = Vec(acc[d]) * cvv
+                for part in fx.range_constexpr(tn // 64):
+                    words = []
+                    for pack in fx.range_constexpr(4):
+                        vt = fx.slice(value_tiles, (None, None, d, part * 4 + pack))
+                        frag = fx.make_fragment_like(
+                            thr.partition_A(vt), fx.Float8E4M3FN
+                        )
+                        fx.copy(trans, cv.partition_S(vt), cv.retile(frag))
+                        w = Vec(frag.load()).bitcast(fx.Int32)
+                        words.extend([w[0], w[1]])
+                    vr = Vec.from_elements(words, fx.Int32)
+                    scaled = Vec(
+                        fx.rocdl.mfma_scale_f32_32x32x64_f8f6f4(
+                            T.vec(16, T.f32),
+                            [
+                                vr.ir_value(),
+                                Vec(prs[part]).ir_value(),
+                                scaled.ir_value(),
+                                0,
+                                0,
+                                0,
+                                fx.Int32(2139062143).ir_value(),
+                                0,
+                                fx.Int32(2139062143).ir_value(),
+                            ],
+                        )
+                    )
+                acc[d] = scaled
+            fx.gpu.barrier()
+            return [m, total, *acc]
+
+        final = initial
+        for tile, args in range(fx.Int32(0), tile_end, fx.Int32(1), init=initial):
+            result = process(tile, args, tile % 2)
+            final = yield result
+        if row < s:
+            inv = fx.Float32(1.0) / (fx.Float32(final[1]))
+            for d in fx.range_constexpr(4):
+                out_words = (
+                    Vec(final[2 + d])
+                    * Vec.from_elements([inv], fx.Float32).broadcast_to(16)
+                ).bitcast(fx.Int32)
+                for group in fx.range_constexpr(2):
+                    lower, upper = ([], [])
+                    for j in fx.range_constexpr(4):
+                        pair = fx.rocdl.permlane32_swap(
+                            ir.Type.parse("!llvm.struct<(i32, i32)>"),
+                            fx.Int32(out_words[group * 8 + j]).ir_value(),
+                            fx.Int32(out_words[group * 8 + j + 4]).ir_value(),
+                            False,
+                            True,
+                        )
+                        lower.append(fx.Int32(llvm.extractvalue(T.i32, pair, [0])))
+                        upper.append(fx.Int32(llvm.extractvalue(T.i32, pair, [1])))
+                    frag = fx.make_rmem_tensor(8, fx.BFloat16)
+                    frag.store(
+                        Vec.from_elements(lower + upper, fx.Int32)
+                        .bitcast(fx.Float32)
+                        .to(fx.BFloat16)
+                    )
+                    dest = fx.make_view(
+                        fx.get_iter(ob)
+                        + (row * 12 + head) * dv
+                        + d * 32
+                        + group * 16
+                        + lane // 32 * 8,
+                        fx.make_layout(8, 1),
+                    )
+                    fx.copy(
+                        fx.make_copy_atom(fx.rocdl.BufferCopy128b(), fx.BFloat16),
+                        frag,
+                        dest,
+                    )
+            if lane < 32:
+                lb[row * 12 + head] = (
+                    fx.Float32(final[0]) + fx.math.log2(fx.Float32(final[1])) - 8.0
+                ) * math.log(2.0)
+
+    @flyc.jit
+    def launch(
+        q: fx.Tensor,
+        k: fx.Tensor,
+        v: fx.Tensor,
+        o: fx.Tensor,
+        lse: fx.Tensor,
+        stream: fx.Stream = fx.Stream(None),  # noqa: B008 - FlyDSL ABI default
+    ):
+        kernel(q, k, v, o, lse).launch(
+            grid=(12, nblocks, 1), block=(threads, 1, 1), stream=stream
+        )
+
+    launch.compile_hints = {"waves_per_eu": 2}
+    return launch
+
+
+@functools.lru_cache(None)
+def _build_prefill_convert(s):
+    nq, nk, nv = (s * 12 * 192, s * 12 * 192, s * 12 * 128)
+    qt, kt, vt = ((nq + 2047) // 2048, (nk + 2047) // 2048, (nv + 2047) // 2048)
+
+    @flyc.kernel(known_block_size=[256, 1, 1])
+    def kernel(
+        q: fx.Tensor,
+        k: fx.Tensor,
+        v: fx.Tensor,
+        qo: fx.Tensor,
+        ko: fx.Tensor,
+        vo: fx.Tensor,
+    ):
+        block = fx.Int32(fx.block_idx.x)
+        tid = fx.Int32(fx.thread_idx.x)
+
+        def convert(src, dst, n, b):
+            offset = b * 2048 + tid * 8
+            if offset < n:
+                source = fx.make_view(
+                    fx.get_iter(_global(src, n)) + offset, fx.make_layout(8, 1)
+                )
+                target = fx.make_view(
+                    fx.get_iter(_global(dst, n)) + offset, fx.make_layout(8, 1)
+                )
+                inp = fx.make_rmem_tensor(8, fx.BFloat16)
+                out = fx.make_rmem_tensor(8, fx.Float8E4M3FN)
+                fx.copy(
+                    fx.make_copy_atom(fx.rocdl.BufferCopy128b(), fx.BFloat16),
+                    source,
+                    inp,
+                )
+                out.store(_prefill_pack8(inp.load()))
+                fx.copy(
+                    fx.make_copy_atom(fx.rocdl.BufferCopy64b(), fx.Float8E4M3FN),
+                    out,
+                    target,
+                )
+
+        if block < qt:
+            convert(q, qo, nq, block)
+        elif block < qt + kt:
+            convert(k, ko, nk, block - qt)
+        else:
+            convert(v, vo, nv, block - qt - kt)
+
+    @flyc.jit
+    def launch(
+        q: fx.Tensor,
+        k: fx.Tensor,
+        v: fx.Tensor,
+        qo: fx.Tensor,
+        ko: fx.Tensor,
+        vo: fx.Tensor,
+        stream: fx.Stream = fx.Stream(None),  # noqa: B008 - FlyDSL ABI default
+    ):
+        kernel(q, k, v, qo, ko, vo).launch(
+            grid=(qt + kt + vt, 1, 1), block=(256, 1, 1), stream=stream
+        )
+
+    return launch
+
+
+class KimiMLAPrefillPlan:
+    """Dense causal K3 prefill after KV decompression, with 12 heads per rank.
+
+    Q/K are [S, 12, 192], V is [S, 12, 128]. Inputs are contiguous BF16
+    or FP8 E4M3FN, selected by input_dtype. BF16 inputs use scale-1 FP8
+    conversion, matching the K3 AITER prefill path. O is BF16 [S, 12, 128]
+    and LSE is natural-log FP32 [S, 12]. No max-score output is produced.
+
+    This plan requires a single request with Q length equal to KV length.
+    It does not perform kv_b_proj, paged-cache lookup, or chunked-context merge.
+    Calls sharing a plan or workspace must be ordered. Warm up before graph
+    capture; each call overwrites the plan's output and LSE buffers.
+    """
+
+    def __init__(
+        self,
+        *,
+        seq_len: int,
+        device: torch.device | str = "cuda",
+        input_dtype: torch.dtype = torch.bfloat16,
+        workspace: tuple[torch.Tensor, torch.Tensor, torch.Tensor] | None = None,
+    ):
+        if (
+            not isinstance(seq_len, int)
+            or not 128 <= seq_len <= 262144
+            or seq_len % 128
+        ):
+            raise ValueError("seq_len must be a multiple of 128 in [128, 262144]")
+        if input_dtype not in (torch.bfloat16, torch.float8_e4m3fn):
+            raise ValueError("input_dtype must be BF16 or FP8 E4M3FN")
+        device = torch.device(device)
+        if device.type != "cuda":
+            raise ValueError("Kimi prefill requires a gfx950 GPU")
+        if device.index is None:
+            device = torch.device("cuda", torch.accelerator.current_device_index())
+        arch = torch.cuda.get_device_properties(device).gcnArchName.split(":")[0]
+        if arch != "gfx950":
+            raise ValueError(f"Kimi prefill requires gfx950, got {arch}")
+        self.device = device
+        self.seq_len = seq_len
+        self.input_dtype = input_dtype
+        self.output = torch.empty(
+            (seq_len, 12, 128), device=device, dtype=torch.bfloat16
+        )
+        self.lse = torch.empty((seq_len, 12), device=device, dtype=torch.float32)
+        direct_bf16 = input_dtype == torch.bfloat16 and seq_len <= 512
+        self._convert = None
+        self.workspace = None
+        if input_dtype == torch.bfloat16 and not direct_bf16:
+            shapes = ((seq_len, 12, 192), (seq_len, 12, 192), (seq_len, 12, 128))
+            if workspace is None:
+                workspace = tuple(
+                    torch.empty(shape, device=device, dtype=torch.float8_e4m3fn)
+                    for shape in shapes
+                )
+            if len(workspace) != 3:
+                raise ValueError("workspace must contain FP8 Q, K and V buffers")
+            for name, tensor, shape in zip(
+                ("Q workspace", "K workspace", "V workspace"), workspace, shapes
+            ):
+                self._check(name, tensor, shape, torch.float8_e4m3fn)
+            self.workspace = workspace
+            self._convert = _build_prefill_convert(seq_len)
+        elif workspace is not None:
+            raise ValueError("This plan does not need an FP8 conversion workspace")
+        self._launch = _build_prefill(
+            seq_len,
+            bf16_input=direct_bf16,
+            waves=4 if seq_len < 32768 else 8,
+            kv_tile=64 if direct_bf16 else 128,
+        )
+
+    def _check(self, name, tensor, shape, dtype):
+        if not isinstance(tensor, torch.Tensor):
+            raise TypeError(f"{name} must be a torch.Tensor")
+        if tuple(tensor.shape) != tuple(shape) or tensor.dtype != dtype:
+            raise ValueError(f"{name} must have shape {shape} and dtype {dtype}")
+        if tensor.device != self.device or not tensor.is_contiguous():
+            raise ValueError(f"{name} must be contiguous on {self.device}")
+
+    def __call__(self, q, k, v, *, output=None, lse=None, stream=None):
+        s = self.seq_len
+        self._check("q", q, (s, 12, 192), self.input_dtype)
+        self._check("k", k, (s, 12, 192), self.input_dtype)
+        self._check("v", v, (s, 12, 128), self.input_dtype)
+        output = self.output if output is None else output
+        lse = self.lse if lse is None else lse
+        self._check("output", output, (s, 12, 128), torch.bfloat16)
+        self._check("lse", lse, (s, 12), torch.float32)
+        stream = torch.cuda.current_stream(self.device) if stream is None else stream
+        if self._convert is not None:
+            self._convert(q, k, v, *self.workspace, stream=stream)
+            q, k, v = self.workspace
+        self._launch(q, k, v, output, lse, stream=stream)
         return output, lse
