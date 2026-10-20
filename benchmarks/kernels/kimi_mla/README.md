@@ -3,8 +3,8 @@
 A standalone three-file bundle for conc1, seven speculative tokens, TP8/DCP8
 and FP8 KV cache:
 
-- [mla_decode.py](mla_decode.py): FlyDSL `KimiMLADecodePlan` and
-  `KimiMLAPrefillPlan` APIs; the filename retains the original decode import.
+- [mla.py](mla.py): FlyDSL `KimiMLADecodePlan` and
+  `KimiMLAPrefillPlan` APIs for decode and prefill.
 - [benchmark.py](benchmark.py): input generation, FP32 reference, AITER ASM
   baselines, original PR194309 FlexAttention forward, and alternating O+LSE
   graph timings. Select prefill with `--mode prefill`.
@@ -25,7 +25,7 @@ tokens. Query `t` on rank `r` sees
 length within the allocated index capacity and provide valid slot indices.
 
 ```python
-from mla_decode import KimiMLADecodePlan
+from mla import KimiMLADecodePlan
 
 # Allocate and warm up before graph capture.
 plan = KimiMLADecodePlan(
@@ -183,7 +183,7 @@ attention with Q length equal to KV length, for multiples of 128 from 128 to
 The softmax scale is `192**-0.5`; there is no max-score output.
 
 ```python
-from mla_decode import KimiMLAPrefillPlan
+from mla import KimiMLAPrefillPlan
 
 # Q/K/V are contiguous BF16 tensors on the same gfx950 device.
 plan = KimiMLAPrefillPlan(seq_len=q.shape[0], device=q.device)

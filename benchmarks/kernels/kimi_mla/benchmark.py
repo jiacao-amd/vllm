@@ -18,7 +18,7 @@ from pathlib import Path
 
 import aiter
 import flydsl
-import mla_decode as mla_decode_kimi
+import mla as kimi_mla
 import torch
 from aiter.mla import mla_decode_fwd
 
@@ -207,9 +207,9 @@ def main(args):
         kernel_sha256="",
     )
     environment["kernel_sha256"] = hashlib.sha256(
-        Path(mla_decode_kimi.__file__).read_bytes()
+        Path(kimi_mla.__file__).read_bytes()
     ).hexdigest()
-    environment["kernel"] = str(Path(mla_decode_kimi.__file__).resolve())
+    environment["kernel"] = str(Path(kimi_mla.__file__).resolve())
     results = []
     print("ENV", environment, flush=True)
     for layout in args.layouts:
@@ -227,7 +227,7 @@ def main(args):
             q, kv, idx, seq, qs, ks, ref, ref_lse = data
             out = torch.empty_like(ref, dtype=torch.bfloat16)
             lse = torch.empty_like(ref_lse)
-            plan = mla_decode_kimi.KimiMLADecodePlan(
+            plan = kimi_mla.KimiMLADecodePlan(
                 max_local_tokens=idx.numel(),
                 cache_slots=kv.shape[0],
                 cp_rank=args.rank,
@@ -563,9 +563,7 @@ def main_prefill(args):
         flydsl=flydsl.__version__,
         device=str(torch.cuda.get_device_properties(0)),
         original_sha256=_FLEX_HASHES["flex_attn_fwd_gfx950.py"],
-        kernel_sha256=hashlib.sha256(
-            Path(mla_decode_kimi.__file__).read_bytes()
-        ).hexdigest(),
+        kernel_sha256=hashlib.sha256(Path(kimi_mla.__file__).read_bytes()).hexdigest(),
         harness_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
     )
     print("ENV", json.dumps(environment), flush=True)
@@ -630,10 +628,10 @@ def main_prefill(args):
                 q, k, v
             )
         if "flydsl" in args.impls:
-            plan = mla_decode_kimi.KimiMLAPrefillPlan(seq_len=s, device=q.device)
+            plan = kimi_mla.KimiMLAPrefillPlan(seq_len=s, device=q.device)
             funcs["flydsl"] = (functools.partial(plan, q, k, v), plan.output, plan.lse)
             q8, k8, v8 = [t.to(torch.float8_e4m3fn) for t in (q, k, v)]
-            fp8_plan = mla_decode_kimi.KimiMLAPrefillPlan(
+            fp8_plan = kimi_mla.KimiMLAPrefillPlan(
                 seq_len=s, device=q.device, input_dtype=torch.float8_e4m3fn
             )
             funcs["flydsl_fp8"] = (
